@@ -17,6 +17,8 @@ where
         }
     }
 
+    // TODO: add size, contains, remove, iterator, try_insert, adapt to std collection api
+
     pub fn insert(&mut self, key: K, value: V) -> Option<V> {
         if let SubNode::Node(root) = &mut self.root {
             root.insert(key, value)
@@ -30,9 +32,10 @@ where
         unimplemented!()
     }
 
+    // TODO: Find out how to return a value from a deleted entry
     pub fn remove(&mut self, key: &K) -> Option<V> {
-        if let Some(node) = self.remove_node(key) {
-            Some(node.value)
+        if let Some(_node) = self.remove_node(key) {
+            unimplemented!()
         } else {
             None
         }
@@ -306,7 +309,15 @@ where
         }
     }
 
-    fn remove_node(&mut self, _key: &K) -> Option<TreeNode<K, V>> {
+    fn remove_node(&mut self, _key: &K) -> Option<(bool, V)> {
+        /*        if *key < self.key {
+                   unimplemented!()
+               } else if *key > self.key {
+                   unimplemented!()
+               } else {
+                   Some((true, self.value))
+               }
+        */
         unimplemented!()
     }
 }
