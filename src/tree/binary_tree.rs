@@ -1,11 +1,13 @@
-pub struct BTree<'a, K: PartialOrd, V: Clone> {
+use std::fmt::Debug;
+
+pub struct BTree<'a, K: PartialOrd + Debug, V: Clone> {
     root: SubNode<K, V>,
     iter_pos: Option<&'a K>,
 }
 
 impl<'a, K, V> BTree<'a, K, V>
 where
-    K: PartialOrd,
+    K: PartialOrd + Debug,
     V: Clone,
 {
     pub fn new() -> BTree<'a, K, V> {
@@ -20,6 +22,18 @@ where
             root.insert(key, value)
         } else {
             self.root = SubNode::Node(Box::new(TreeNode::new(key, value)));
+            None
+        }
+    }
+
+    fn remove_node(&mut self, _key: &K) -> Option<TreeNode<K, V>> {
+        unimplemented!()
+    }
+
+    pub fn remove(&mut self, key: &K) -> Option<V> {
+        if let Some(node) = self.remove_node(key) {
+            Some(node.value)
+        } else {
             None
         }
     }
@@ -145,13 +159,13 @@ where
 */
 
 #[derive(Debug)]
-enum SubNode<K: PartialOrd, V: Clone> {
+enum SubNode<K: PartialOrd + Debug, V: Clone> {
     Node(Box<TreeNode<K, V>>),
     Nil,
 }
 
 #[derive(Debug)]
-struct TreeNode<K: PartialOrd, V: Clone> {
+struct TreeNode<K: PartialOrd + Debug, V: Clone> {
     key: K,
     value: V,
     left: SubNode<K, V>,
@@ -160,7 +174,7 @@ struct TreeNode<K: PartialOrd, V: Clone> {
 
 impl<K, V> TreeNode<K, V>
 where
-    K: PartialOrd,
+    K: PartialOrd + Debug,
     V: Clone,
 {
     fn new(key: K, value: V) -> TreeNode<K, V> {
@@ -242,7 +256,12 @@ where
         if self.key < *key {
             // search larger
             if let SubNode::Node(right) = &self.right {
-                right.smaller_node(key)
+                let res = right.smaller_node(key);
+                if res.is_none() {
+                    Some(self)
+                } else {
+                    res
+                }
             } else {
                 Some(self)
             }
@@ -268,7 +287,12 @@ where
         if self.key > *key {
             // search smaller
             if let SubNode::Node(left) = &self.left {
-                left.larger_node(key)
+                let res = left.larger_node(key);
+                if res.is_none() {
+                    Some(self)
+                } else {
+                    res
+                }
             } else {
                 Some(self)
             }
@@ -281,11 +305,16 @@ where
             }
         }
     }
+
+    fn remove_node(&mut self, _key: &K) -> Option<TreeNode<K, V>> {
+        unimplemented!()
+    }
 }
 
 #[cfg(test)]
 mod test {
     use super::*;
+
     #[test]
     fn test_first_level() {
         let mut tree: BTree<u32, String> = BTree::new();
@@ -295,6 +324,7 @@ mod test {
         assert_eq!(tree.find(&11), None);
     }
 
+    #[test]
     fn test_next_level() {
         let values = [10u32, 20, 5, 15, 25, 3, 8];
 
@@ -317,6 +347,23 @@ mod test {
         assert_eq!(tree.find(&11), None)
     }
 
+    #[test]
+    fn test_remove() {
+        let values = [10u32, 20, 5, 15, 25, 3, 8];
+
+        let mut tree: BTree<u32, String> = BTree::new();
+        for value in values {
+            assert_eq!(tree.insert(value, value.to_string()), None);
+        }
+
+        for value in values {
+            assert_eq!(tree.remove(&value), Some(value.to_string()));
+            assert_eq!(tree.find(&value), None);
+            assert_eq!(tree.remove(&value), None);
+        }
+    }
+
+    #[test]
     fn test_mut() {
         let values = [10u32, 20, 5, 15, 25, 3, 8];
         let mut tree: BTree<u32, String> = BTree::new();
@@ -337,6 +384,7 @@ mod test {
         }
     }
 
+    #[test]
     fn test_smallest() {
         let values = [10u32, 20, 5, 15, 25, 3, 8];
 
@@ -348,6 +396,7 @@ mod test {
         assert_eq!(tree.smallest(), Some((&3, &3.to_string())))
     }
 
+    #[test]
     fn test_largest() {
         let values = [10u32, 20, 5, 15, 25, 3, 8];
 
@@ -360,6 +409,7 @@ mod test {
         assert_eq!(tree.largest(), Some((&25, &25.to_string())))
     }
 
+    #[test]
     fn test_larger() {
         let mut values = [10u32, 20, 5, 15, 25, 3, 8];
 
@@ -374,16 +424,19 @@ mod test {
         for index in 1..values.len() {
             let expected = values[index];
             if let Some((lkey, lval)) = tree.larger(&key) {
+                eprintln!("looking for larger than {:?}, got {:?}", key, lkey);
                 assert_eq!(expected, *lkey);
                 assert_eq!(expected.to_string(), *lval);
                 key = *lkey;
             } else {
-                panic!("expected {}, found None", expected);
+                eprintln!("looking for larger than {:?}, got None", key);
+                panic!("expected {}, found None @ key {}", expected, key);
             }
         }
         assert_eq!(tree.larger(&key), None)
     }
 
+    #[test]
     fn test_smaller() {
         let mut values = [10u32, 20, 5, 15, 25, 3, 8];
 
@@ -399,11 +452,13 @@ mod test {
         for index in 1..values.len() {
             let expected = values[index];
             if let Some((lkey, lval)) = tree.smaller(&key) {
+                eprintln!("looking for smaller than {:?}, got {:?}", key, lkey);
                 assert_eq!(expected, *lkey);
                 assert_eq!(expected.to_string(), *lval);
                 key = *lkey;
             } else {
-                panic!("expected {}, found None", expected);
+                eprintln!("looking for smaller than {:?}, got None", key);
+                panic!("expected {}, found None @ key {}", expected, key);
             }
         }
         assert_eq!(tree.smaller(&key), None)
