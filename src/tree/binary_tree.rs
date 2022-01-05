@@ -1,17 +1,17 @@
-pub struct BTree<K: PartialOrd, V: Clone> {
+pub struct BTree<'a, K: PartialOrd, V: Clone> {
     root: SubNode<K, V>,
-    // iter_pos: Option<&'a TreeNode<K, V>>,
+    iter_pos: Option<&'a TreeNode<K, V>>,
 }
 
-impl<'a, K, V> BTree<K, V>
+impl<'a, K, V> BTree<'a, K, V>
 where
     K: PartialOrd,
-    V: 'a + Clone,
+    V: Clone,
 {
-    pub fn new() -> BTree<K, V> {
+    pub fn new() -> BTree<'a, K, V> {
         BTree {
             root: SubNode::Nil,
-            // iter_pos: None,
+            iter_pos: None,
         }
     }
 
@@ -24,22 +24,93 @@ where
         }
     }
 
-    pub fn find(&'a self, key: K) -> Option<&'a V> {
-        if let SubNode::Node(root) = &self.root {
-            root.find(key)
+    pub fn find(&self, key: K) -> Option<&V> {
+        if let Some(node) = self.find_node(key) {
+            Some(&node.value)
         } else {
             None
         }
     }
 
-    pub fn find_mut(&'a mut self, key: K) -> Option<&'a mut V> {
+    fn find_node(&self, key: K) -> Option<&TreeNode<K, V>> {
+        if let SubNode::Node(root) = &self.root {
+            root.find_node(key)
+        } else {
+            None
+        }
+    }
+
+    pub fn find_mut(&mut self, key: K) -> Option<&mut V> {
+        if let Some(node) = self.find_mut_node(key) {
+            Some(&mut node.value)
+        } else {
+            None
+        }
+    }
+
+    fn find_mut_node(&mut self, key: K) -> Option<&mut TreeNode<K, V>> {
         if let SubNode::Node(root) = &mut self.root {
-            root.find_mut(key)
+            root.find_mut_node(key)
+        } else {
+            None
+        }
+    }
+
+    fn smallest_node(&self) -> Option<&TreeNode<K, V>> {
+        if let SubNode::Node(root) = &self.root {
+            root.smallest_node()
+        } else {
+            None
+        }
+    }
+
+    pub fn smallest(&self) -> Option<&V> {
+        if let Some(node) = self.smallest_node() {
+            Some(&node.value)
+        } else {
+            None
+        }
+    }
+
+    fn largest_node(&self) -> Option<&TreeNode<K, V>> {
+        if let SubNode::Node(root) = &self.root {
+            root.largest_node()
+        } else {
+            None
+        }
+    }
+
+    pub fn largest(&self) -> Option<&V> {
+        if let Some(node) = self.largest_node() {
+            Some(&node.value)
         } else {
             None
         }
     }
 }
+
+/*
+impl<'a, K, V> Iterator for BTree<'a, K, V>
+where
+    K: PartialOrd,
+    V: Clone,
+{
+    type Item = (&'a K, &'a V);
+
+    fn next(&mut self) -> Option<Self::Item> {
+        if let Some(_curr_node) = &self.iter_pos {
+            unimplemented!()
+        } else {
+            if let Some(node) = self.smallest_node() {
+                self.iter_pos = Some(&node);
+                Some((&node.key, &node.value))
+            } else {
+                None
+            }
+        }
+    }
+}
+*/
 
 #[derive(Debug)]
 enum SubNode<K: PartialOrd, V: Clone> {
@@ -55,10 +126,10 @@ struct TreeNode<K: PartialOrd, V: Clone> {
     right: SubNode<K, V>,
 }
 
-impl<'a, K, V> TreeNode<K, V>
+impl<K, V> TreeNode<K, V>
 where
     K: PartialOrd,
-    V: 'a + Clone,
+    V: Clone,
 {
     fn new(key: K, value: V) -> TreeNode<K, V> {
         TreeNode {
@@ -91,39 +162,55 @@ where
         }
     }
 
-    fn find(&'a self, key: K) -> Option<&'a V> {
+    fn find_node(&self, key: K) -> Option<&TreeNode<K, V>> {
         if key < self.key {
             if let SubNode::Node(left) = &self.left {
-                left.find(key)
+                left.find_node(key)
             } else {
                 None
             }
         } else if key > self.key {
             if let SubNode::Node(right) = &self.right {
-                right.find(key)
+                right.find_node(key)
             } else {
                 None
             }
         } else {
-            Some(&self.value)
+            Some(self)
         }
     }
 
-    fn find_mut(&'a mut self, key: K) -> Option<&'a mut V> {
+    fn find_mut_node(&mut self, key: K) -> Option<&mut TreeNode<K, V>> {
         if key < self.key {
             if let SubNode::Node(left) = &mut self.left {
-                left.find_mut(key)
+                left.find_mut_node(key)
             } else {
                 None
             }
         } else if key > self.key {
             if let SubNode::Node(right) = &mut self.right {
-                right.find_mut(key)
+                right.find_mut_node(key)
             } else {
                 None
             }
         } else {
-            Some(&mut self.value)
+            Some(self)
+        }
+    }
+
+    fn smallest_node(&self) -> Option<&TreeNode<K, V>> {
+        if let SubNode::Node(left) = &self.left {
+            left.smallest_node()
+        } else {
+            Some(&self)
+        }
+    }
+
+    fn largest_node(&self) -> Option<&TreeNode<K, V>> {
+        if let SubNode::Node(left) = &self.right {
+            left.largest_node()
+        } else {
+            Some(&self)
         }
     }
 }
@@ -180,5 +267,29 @@ mod test {
         for value in values {
             assert_eq!(tree.find(value), Some(&(value * 2).to_string()));
         }
+    }
+
+    fn test_smallest() {
+        let values = [10u32, 20, 5, 15, 25, 3, 8];
+
+        let mut tree: BTree<u32, String> = BTree::new();
+        assert_eq!(tree.smallest(), None);
+        for value in values {
+            assert_eq!(tree.insert(value, value.to_string()), None);
+        }
+
+        assert_eq!(tree.smallest(), Some(&3.to_string()))
+    }
+
+    fn test_largest() {
+        let values = [10u32, 20, 5, 15, 25, 3, 8];
+
+        let mut tree: BTree<u32, String> = BTree::new();
+        assert_eq!(tree.smallest(), None);
+        for value in values {
+            assert_eq!(tree.insert(value, value.to_string()), None);
+        }
+
+        assert_eq!(tree.largest(), Some(&25.to_string()))
     }
 }
