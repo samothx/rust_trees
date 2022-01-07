@@ -18,3 +18,20 @@ pub mod util {
         res
     }
 }
+
+pub mod testing {
+    /*   #[allow(dead_code)]
+      fn test_mut_ref() {
+          let mut data = String::from("data");
+          let mut dref0: Option<&mut String> = Some(&mut data);
+          let mut dref1: Option<&mut String> = None;
+          if let Some(data) = dref0 {
+              data.push('!');
+              dref1 = Some(data);
+          } else {
+              dref0 = None;
+          }
+      }
+
+    */
+}

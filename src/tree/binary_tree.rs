@@ -1,5 +1,7 @@
 use std::fmt::Debug;
 
+type SubNode<K, V> = Option<Box<TreeNode<K, V>>>;
+
 pub struct BTree<'a, K: PartialOrd + Debug, V: Clone> {
     root: SubNode<K, V>,
     iter_pos: Option<&'a K>,
@@ -12,7 +14,7 @@ where
 {
     pub fn new() -> BTree<'a, K, V> {
         BTree {
-            root: SubNode::Nil,
+            root: None,
             iter_pos: None,
         }
     }
@@ -20,10 +22,107 @@ where
     // TODO: add size, contains, remove, iterator, try_insert, adapt to std collection api
 
     pub fn insert(&mut self, key: K, value: V) -> Option<V> {
-        if let SubNode::Node(root) = &mut self.root {
-            root.insert(key, value)
+        if let Some(node) = &mut self.root {
+            let mut curr = node;
+            loop {
+                if key < curr.key {
+                    match &mut curr.smaller {
+                        Some(node) => curr = node,
+                        s @ None => {
+                            *s = Some(Box::new(TreeNode::new(key, value)));
+                            return None;
+                        }
+                    }
+                } else if key > curr.key {
+                    match &mut curr.bigger {
+                        Some(node) => curr = node,
+                        s @ None => {
+                            *s = Some(Box::new(TreeNode::new(key, value)));
+                            return None;
+                        }
+                    }
+                } else {
+                    return Some(std::mem::replace(&mut curr.value, value));
+                }
+            }
         } else {
-            self.root = SubNode::Node(Box::new(TreeNode::new(key, value)));
+            self.root = Some(Box::new(TreeNode::new(key, value)));
+            None
+        }
+    }
+
+    pub fn contains(&self, key: &K) -> bool {
+        if let Some(node) = &self.root {
+            let mut curr = node;
+            // loop {
+            loop {
+                if *key < curr.key {
+                    if let Some(subnode) = &curr.smaller {
+                        curr = subnode;
+                    } else {
+                        return false;
+                    }
+                } else if *key > curr.key {
+                    if let Some(subnode) = &curr.bigger {
+                        curr = subnode;
+                    } else {
+                        return false;
+                    }
+                } else {
+                    return true;
+                }
+            }
+        } else {
+            false
+        }
+    }
+
+    pub fn find(&self, key: &K) -> Option<&V> {
+        if let Some(node) = &self.root {
+            let mut curr = node;
+            loop {
+                if *key < curr.key {
+                    if let Some(subnode) = &curr.smaller {
+                        curr = subnode;
+                    } else {
+                        return None;
+                    }
+                } else if *key > curr.key {
+                    if let Some(subnode) = &curr.bigger {
+                        curr = subnode;
+                    } else {
+                        return None;
+                    }
+                } else {
+                    return Some(&curr.value);
+                }
+            }
+        } else {
+            None
+        }
+    }
+
+    pub fn find_mut(&mut self, key: &K) -> Option<&mut V> {
+        if let Some(node) = &mut self.root {
+            let mut curr = node;
+            loop {
+                if *key < curr.key {
+                    if let Some(subnode) = &mut curr.smaller {
+                        curr = subnode;
+                    } else {
+                        return None;
+                    }
+                } else if *key > curr.key {
+                    if let Some(subnode) = &mut curr.bigger {
+                        curr = subnode;
+                    } else {
+                        return None;
+                    }
+                } else {
+                    return Some(&mut curr.value);
+                }
+            }
+        } else {
             None
         }
     }
@@ -41,40 +140,8 @@ where
         }
     }
 
-    pub fn find(&self, key: &K) -> Option<&V> {
-        if let Some(node) = self.find_node(key) {
-            Some(&node.value)
-        } else {
-            None
-        }
-    }
-
-    fn find_node(&self, key: &K) -> Option<&TreeNode<K, V>> {
-        if let SubNode::Node(root) = &self.root {
-            root.find_node(key)
-        } else {
-            None
-        }
-    }
-
-    pub fn find_mut(&mut self, key: &K) -> Option<&mut V> {
-        if let Some(node) = self.find_mut_node(key) {
-            Some(&mut node.value)
-        } else {
-            None
-        }
-    }
-
-    fn find_mut_node(&mut self, key: &K) -> Option<&mut TreeNode<K, V>> {
-        if let SubNode::Node(root) = &mut self.root {
-            root.find_mut_node(key)
-        } else {
-            None
-        }
-    }
-
     fn smallest_node(&self) -> Option<&TreeNode<K, V>> {
-        if let SubNode::Node(root) = &self.root {
+        if let Some(root) = &self.root {
             root.smallest_node()
         } else {
             None
@@ -90,7 +157,7 @@ where
     }
 
     fn largest_node(&self) -> Option<&TreeNode<K, V>> {
-        if let SubNode::Node(root) = &self.root {
+        if let Some(root) = &self.root {
             root.largest_node()
         } else {
             None
@@ -106,7 +173,7 @@ where
     }
 
     fn larger_node(&self, key: &K) -> Option<&TreeNode<K, V>> {
-        if let SubNode::Node(root) = &self.root {
+        if let Some(root) = &self.root {
             root.larger_node(key)
         } else {
             None
@@ -122,7 +189,7 @@ where
     }
 
     fn smaller_node(&self, key: &K) -> Option<&TreeNode<K, V>> {
-        if let SubNode::Node(root) = &self.root {
+        if let Some(root) = &self.root {
             root.smaller_node(key)
         } else {
             None
@@ -162,17 +229,11 @@ where
 */
 
 #[derive(Debug)]
-enum SubNode<K: PartialOrd + Debug, V: Clone> {
-    Node(Box<TreeNode<K, V>>),
-    Nil,
-}
-
-#[derive(Debug)]
 struct TreeNode<K: PartialOrd + Debug, V: Clone> {
     key: K,
     value: V,
-    left: SubNode<K, V>,
-    right: SubNode<K, V>,
+    smaller: SubNode<K, V>,
+    bigger: SubNode<K, V>,
 }
 
 impl<K, V> TreeNode<K, V>
@@ -184,72 +245,14 @@ where
         TreeNode {
             key,
             value,
-            left: SubNode::Nil,
-            right: SubNode::Nil,
-        }
-    }
-
-    fn insert(&mut self, key: K, value: V) -> Option<V> {
-        if key < self.key {
-            if let SubNode::Node(left) = &mut self.left {
-                left.insert(key, value)
-            } else {
-                self.left = SubNode::Node(Box::new(TreeNode::new(key, value)));
-                None
-            }
-        } else if key > self.key {
-            if let SubNode::Node(right) = &mut self.right {
-                right.insert(key, value)
-            } else {
-                self.right = SubNode::Node(Box::new(TreeNode::new(key, value)));
-                None
-            }
-        } else {
-            let tmp = (self.value).clone();
-            self.value = value;
-            Some(tmp)
-        }
-    }
-
-    fn find_node(&self, key: &K) -> Option<&TreeNode<K, V>> {
-        if *key < self.key {
-            if let SubNode::Node(left) = &self.left {
-                left.find_node(key)
-            } else {
-                None
-            }
-        } else if *key > self.key {
-            if let SubNode::Node(right) = &self.right {
-                right.find_node(key)
-            } else {
-                None
-            }
-        } else {
-            Some(self)
-        }
-    }
-
-    fn find_mut_node(&mut self, key: &K) -> Option<&mut TreeNode<K, V>> {
-        if *key < self.key {
-            if let SubNode::Node(left) = &mut self.left {
-                left.find_mut_node(key)
-            } else {
-                None
-            }
-        } else if *key > self.key {
-            if let SubNode::Node(right) = &mut self.right {
-                right.find_mut_node(key)
-            } else {
-                None
-            }
-        } else {
-            Some(self)
+            smaller: None,
+            bigger: None,
         }
     }
 
     fn smallest_node(&self) -> Option<&TreeNode<K, V>> {
-        if let SubNode::Node(left) = &self.left {
-            left.smallest_node()
+        if let Some(smaller) = &self.smaller {
+            smaller.smallest_node()
         } else {
             Some(&self)
         }
@@ -258,8 +261,8 @@ where
     fn smaller_node(&self, key: &K) -> Option<&TreeNode<K, V>> {
         if self.key < *key {
             // search larger
-            if let SubNode::Node(right) = &self.right {
-                let res = right.smaller_node(key);
+            if let Some(bigger) = &self.bigger {
+                let res = bigger.smaller_node(key);
                 if res.is_none() {
                     Some(self)
                 } else {
@@ -270,8 +273,8 @@ where
             }
         } else {
             // search smaller
-            if let SubNode::Node(left) = &self.left {
-                left.smaller_node(key)
+            if let Some(smaller) = &self.smaller {
+                smaller.smaller_node(key)
             } else {
                 None
             }
@@ -279,8 +282,8 @@ where
     }
 
     fn largest_node(&self) -> Option<&TreeNode<K, V>> {
-        if let SubNode::Node(right) = &self.right {
-            right.largest_node()
+        if let Some(bigger) = &self.bigger {
+            bigger.largest_node()
         } else {
             Some(&self)
         }
@@ -289,8 +292,8 @@ where
     fn larger_node(&self, key: &K) -> Option<&TreeNode<K, V>> {
         if self.key > *key {
             // search smaller
-            if let SubNode::Node(left) = &self.left {
-                let res = left.larger_node(key);
+            if let Some(smaller) = &self.smaller {
+                let res = smaller.larger_node(key);
                 if res.is_none() {
                     Some(self)
                 } else {
@@ -301,8 +304,8 @@ where
             }
         } else {
             // search larger
-            if let SubNode::Node(right) = &self.right {
-                right.larger_node(key)
+            if let Some(bigger) = &self.bigger {
+                bigger.larger_node(key)
             } else {
                 None
             }
@@ -473,5 +476,20 @@ mod test {
             }
         }
         assert_eq!(tree.smaller(&key), None)
+    }
+
+    #[test]
+    fn test_contains() {
+        let values = [10u32, 20, 5, 15, 25, 3, 8];
+
+        let mut tree: BTree<u32, String> = BTree::new();
+        assert_eq!(tree.smallest(), None);
+        for value in values {
+            assert_eq!(tree.insert(value, value.to_string()), None);
+        }
+        for val in values {
+            assert_eq!(tree.contains(&val), true);
+        }
+        assert_eq!(tree.contains(&100), false);
     }
 }
