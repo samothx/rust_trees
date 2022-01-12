@@ -5,6 +5,11 @@ use rust_tree::tree::binary_tree::BTree;
 // const SAMPLES: usize = 10_000;
 
 fn main() {
+    let mut tree: BTree<u32, String> = BTree::new();
+    tree.insert(10u32, "10".to_string());
+    // tree.insert(5u32, "5".to_string());
+    println!("{}", tree.to_string());
+
     let mut values = [10u32, 20, 5, 15, 25, 3, 8];
 
     let mut tree: BTree<u32, String> = BTree::new();
@@ -12,6 +17,8 @@ fn main() {
     for value in values {
         assert_eq!(tree.insert(value, value.to_string()), None);
     }
+
+    println!("{}", tree.to_string());
 
     values.sort();
     values.reverse();
