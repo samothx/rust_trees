@@ -10,6 +10,12 @@ pub mod linked_list {
         list: Link<T>,
     }
 
+    impl<T> Default for LinkedList<T> {
+        fn default() -> Self {
+            Self::new()
+        }
+    }
+
     impl<T> LinkedList<T> {
         pub fn new() -> Self {
             LinkedList { list: None }

@@ -2,24 +2,192 @@ use std::fmt::Debug;
 
 type SubNode<K, V> = Option<Box<TreeNode<K, V>>>;
 
-pub struct BTree<'a, K: PartialOrd + Debug, V: Clone> {
-    root: SubNode<K, V>,
-    iter_pos: Option<&'a K>,
+enum NodeOrd {
+    Smaller,
+    Larger,
 }
 
-impl<'a, K, V> BTree<'a, K, V>
-where
-    K: PartialOrd + Debug,
-    V: Clone,
-{
-    pub fn new() -> BTree<'a, K, V> {
-        BTree {
-            root: None,
-            iter_pos: None,
+#[derive(Debug)]
+struct TreeNode<K: PartialOrd + Debug, V: Debug> {
+    key: K,
+    value: V,
+    smaller: SubNode<K, V>,
+    larger: SubNode<K, V>,
+}
+
+impl<K: PartialOrd + Debug, V: Debug> TreeNode<K, V> {
+    fn new(key: K, value: V) -> TreeNode<K, V> {
+        TreeNode {
+            key,
+            value,
+            smaller: None,
+            larger: None,
         }
     }
 
+    fn insert_node_rec(&mut self, node: Box<TreeNode<K, V>>) -> Option<V> {
+        if node.key < self.key {
+            if let Some(smaller) = &mut self.smaller {
+                smaller.insert_node_rec(node)
+            } else {
+                self.smaller = Some(node);
+                None
+            }
+        } else if node.key > self.key {
+            if let Some(larger) = &mut self.larger {
+                larger.insert_node_rec(node)
+            } else {
+                self.larger = Some(node);
+                None
+            }
+        } else {
+            // don't even really need to support this case
+            Some(std::mem::replace(&mut self.value, node.value))
+        }
+    }
+
+    fn traverse_asc(&self, func: &mut dyn FnMut(&K, &V)) {
+        if let Some(smaller) = &self.smaller {
+            smaller.traverse_asc(func);
+        }
+        func(&self.key, &self.value);
+        if let Some(larger) = &self.larger {
+            larger.traverse_asc(func);
+        }
+    }
+
+    fn traverse_top_down(&self, func: &mut dyn FnMut(&K, &V)) {
+        func(&self.key, &self.value);
+        if let Some(smaller) = &self.smaller {
+            smaller.traverse_top_down(func);
+        }
+        if let Some(larger) = &self.larger {
+            larger.traverse_top_down(func);
+        }
+    }
+
+    fn traverse_print(&self, depth: u32) {
+        let mut offset = "".to_string();
+        for _ in 1..depth {
+            offset.push_str("  ");
+        }
+        eprintln!(
+            "{}Node {:?} value: {:?}, depth: {}",
+            offset, self.key, self.value, depth
+        );
+
+        if let Some(smaller) = &self.smaller {
+            eprintln!("{}Node {:?} smaller ->", offset, self.key);
+            smaller.traverse_print(depth + 1);
+        } else {
+            eprintln!("{}Node {:?} smaller -> None", offset, self.key);
+        }
+
+        if let Some(larger) = &self.larger {
+            eprintln!("{}Node {:?} larger -> ", offset, self.key);
+            larger.traverse_print(depth + 1);
+        } else {
+            eprintln!("{}Node {:?} larger -> None", offset, self.key);
+        }
+    }
+
+    fn remove(&mut self, key: &K) -> Option<V> {
+        // key == self.key is not expected - that case is to be handled upstream
+        // this is only about removing self.smaller/self.larger from self
+
+        if *key < self.key {
+            // we are working on the smaller link
+            if self.smaller.is_some() {
+                // decouple smaller from self.smaller
+                let mut subnode = self.smaller.take().unwrap();
+                if *key == subnode.key {
+                    // subnode is already removed above, so take care of its children
+                    if subnode.smaller.is_some() {
+                        if subnode.larger.is_some() {
+                            let mut new_smaller =
+                                subnode.smaller.take().expect("unexpected empty node 1");
+                            let _ = new_smaller.insert_node_rec(
+                                subnode.larger.take().expect("unexpected empty node 2"),
+                            );
+                            self.smaller = Some(new_smaller);
+                        } else {
+                            self.smaller = subnode.smaller;
+                        }
+                    } else if subnode.larger.is_some() {
+                        self.smaller = subnode.larger;
+                    }
+                    return Some(subnode.value);
+                } else {
+                    let res = subnode.remove(key);
+                    // restore the link decoupled earlier
+                    self.smaller = Some(subnode);
+                    return res;
+                }
+            } else {
+                return None;
+            }
+        } else {
+            // we are working on the larger link
+            if self.larger.is_some() {
+                // decouple smaller from self.smaller
+                let mut subnode = self.larger.take().unwrap();
+                if *key == subnode.key {
+                    // subnode is already removed above, so take care of its children
+                    if subnode.smaller.is_some() {
+                        if subnode.larger.is_some() {
+                            let mut new_larger =
+                                subnode.smaller.take().expect("unexpected empty node 3");
+                            let _ = new_larger.insert_node_rec(
+                                subnode.larger.take().expect("unexpected empty node 4"),
+                            );
+                            self.larger = Some(new_larger)
+                        } else {
+                            self.larger = subnode.smaller;
+                        }
+                    } else if subnode.larger.is_some() {
+                        self.larger = subnode.larger;
+                    }
+                    return Some(subnode.value);
+                } else {
+                    let res = subnode.remove(key);
+                    // restore the link decoupled earlier
+                    self.larger = Some(subnode);
+                    return res;
+                }
+            } else {
+                return None;
+            }
+        }
+    }
+}
+
+#[derive(Debug)]
+pub struct BTree<K: PartialOrd + Debug, V: Debug> {
+    root: SubNode<K, V>,
+}
+
+impl<K: PartialOrd + Debug, V: Debug> Default for BTree<K, V> {
+    fn default() -> Self {
+        BTree::new()
+    }
+}
+
+impl<K: PartialOrd + Debug, V: Debug> BTree<K, V> {
+    pub fn new() -> BTree<K, V> {
+        BTree { root: None }
+    }
+
     // TODO: add size, contains, remove, iterator, try_insert, adapt to std collection api
+
+    pub fn insert_rec(&mut self, key: K, value: V) -> Option<V> {
+        let new_node = Box::new(TreeNode::new(key, value));
+        if let Some(node) = &mut self.root {
+            node.insert_node_rec(new_node)
+        } else {
+            self.root = Some(new_node);
+            None
+        }
+    }
 
     pub fn insert(&mut self, key: K, value: V) -> Option<V> {
         if let Some(node) = &mut self.root {
@@ -28,16 +196,16 @@ where
                 if key < curr.key {
                     match &mut curr.smaller {
                         Some(node) => curr = node,
-                        s @ None => {
-                            *s = Some(Box::new(TreeNode::new(key, value)));
+                        smaller @ None => {
+                            *smaller = Some(Box::new(TreeNode::new(key, value)));
                             return None;
                         }
                     }
                 } else if key > curr.key {
-                    match &mut curr.bigger {
+                    match &mut curr.larger {
                         Some(node) => curr = node,
-                        s @ None => {
-                            *s = Some(Box::new(TreeNode::new(key, value)));
+                        larger @ None => {
+                            *larger = Some(Box::new(TreeNode::new(key, value)));
                             return None;
                         }
                     }
@@ -48,6 +216,26 @@ where
         } else {
             self.root = Some(Box::new(TreeNode::new(key, value)));
             None
+        }
+    }
+
+    pub fn traverse_asc(&self, func: &mut dyn FnMut(&K, &V)) {
+        if let Some(node) = &self.root {
+            node.traverse_asc(func);
+        }
+    }
+
+    pub fn traverse_top_down(&self, func: &mut dyn FnMut(&K, &V)) {
+        if let Some(node) = &self.root {
+            node.traverse_top_down(func);
+        }
+    }
+
+    pub fn traverse_print(&self) {
+        if let Some(node) = &self.root {
+            node.traverse_print(1);
+        } else {
+            eprintln!("empty root");
         }
     }
 
@@ -63,7 +251,7 @@ where
                         return false;
                     }
                 } else if *key > curr.key {
-                    if let Some(subnode) = &curr.bigger {
+                    if let Some(subnode) = &curr.larger {
                         curr = subnode;
                     } else {
                         return false;
@@ -88,7 +276,7 @@ where
                         return None;
                     }
                 } else if *key > curr.key {
-                    if let Some(subnode) = &curr.bigger {
+                    if let Some(subnode) = &curr.larger {
                         curr = subnode;
                     } else {
                         return None;
@@ -113,7 +301,7 @@ where
                         return None;
                     }
                 } else if *key > curr.key {
-                    if let Some(subnode) = &mut curr.bigger {
+                    if let Some(subnode) = &mut curr.larger {
                         curr = subnode;
                     } else {
                         return None;
@@ -127,14 +315,105 @@ where
         }
     }
 
-    fn remove_node(&mut self, _key: &K) -> Option<TreeNode<K, V>> {
-        unimplemented!()
-    }
-
     // TODO: Find out how to return a value from a deleted entry
+    // TODO: try recursive version first
+
+    /// #remove
+    /// handles removes on layer 1 & 2 of the tree then uses recursive TreeNode.remove()
     pub fn remove(&mut self, key: &K) -> Option<V> {
-        if let Some(_node) = self.remove_node(key) {
-            unimplemented!()
+        if self.root.is_some() {
+            // take  & unwrap root to circumnavigate ownership issues
+            // this has to be undone later if root is not being removed
+            let mut root = self.root.take().expect("unexpected empty root");
+            if *key == root.key {
+                // key found at root - remove root
+                if root.smaller.is_some() {
+                    // root.smaller will be the new root
+                    if root.larger.is_some() {
+                        // have to reinsert root.larger
+                        let mut new_root = root.smaller.take().expect("unexpected empty subnode 1");
+                        let _dummy = new_root.insert_node_rec(
+                            root.larger.take().expect("unexpected empty subnode 2"),
+                        );
+                        self.root = Some(new_root);
+                    } else {
+                        self.root = root.smaller;
+                    }
+                } else if root.larger.is_some() {
+                    // root.larger will be the new root
+                    self.root = root.larger;
+                }
+                Some(root.value)
+            } else if *key < root.key {
+                if root.smaller.is_some() {
+                    // same as above - take & unwrap the value that might or might not be removed
+                    // this has to be undone later if root.smaller is not being removed
+                    let mut smaller = root.smaller.take().expect("unexpected empty subnode 3");
+                    if *key == smaller.key {
+                        // remove root.smaller - it is already unchained - now chain up its children
+                        if smaller.smaller.is_some() {
+                            // smaller.smaller will be the new root.smaller
+                            if smaller.larger.is_some() {
+                                // have to reinsert smaller.larger first
+                                let mut ins_root =
+                                    smaller.smaller.take().expect("unexpected empty subnode 4");
+                                let _dummy = ins_root.insert_node_rec(
+                                    smaller.larger.take().expect("unexpected empty subnode 5"),
+                                );
+                                root.smaller = Some(ins_root);
+                            } else {
+                                root.smaller = smaller.smaller;
+                            }
+                        } else {
+                            // smaller.larger will be the new root.smaller
+                            root.smaller = smaller.larger;
+                        }
+                        self.root = Some(root);
+                        Some(smaller.value)
+                    } else {
+                        let res = smaller.remove(key);
+                        root.smaller = Some(smaller);
+                        self.root = Some(root);
+                        res
+                    }
+                } else {
+                    self.root = Some(root);
+                    None
+                }
+            } else {
+                if root.larger.is_some() {
+                    // same as above - take & unwrap the value that might or might not be removed
+                    // this has to be undone later if root.larger is not being removed
+                    let mut larger = root.larger.take().expect("unexpected empty subnode 6");
+                    if *key == larger.key {
+                        // remove smaller
+                        if larger.smaller.is_some() {
+                            if larger.larger.is_some() {
+                                let mut ins_node =
+                                    larger.smaller.take().expect("unexpected empty subnode 7");
+                                let _dummy = ins_node.insert_node_rec(
+                                    larger.larger.take().expect("unexpected empty subnode 8"),
+                                );
+                                root.larger = Some(ins_node);
+                            } else {
+                                root.larger = larger.smaller;
+                            }
+                        } else {
+                            root.larger = larger.larger;
+                        }
+                        self.root = Some(root);
+                        Some(larger.value)
+                    } else {
+                        let res = larger.remove(key);
+                        root.larger = Some(larger);
+                        self.root = Some(root);
+                        res
+                    }
+                } else {
+                    self.root = Some(root);
+                    None
+                }
+            }
         } else {
             None
         }
@@ -142,12 +421,17 @@ where
 
     fn smallest_node(&self) -> Option<&TreeNode<K, V>> {
         if let Some(root) = &self.root {
-            root.smallest_node()
+            let mut curr = root;
+            while let Some(subnode) = &curr.smaller {
+                curr = subnode;
+            }
+            Some(curr)
         } else {
             None
         }
     }
 
+    // TODO: add a mut version returning Option<(&K, &mut V)> ?
     pub fn smallest(&self) -> Option<(&K, &V)> {
         if let Some(node) = self.smallest_node() {
             Some((&node.key, &node.value))
@@ -156,9 +440,51 @@ where
         }
     }
 
+    fn smaller_node(&self, key: &K) -> Option<&TreeNode<K, V>> {
+        if let Some(root) = &self.root {
+            let mut candidate: Option<&TreeNode<K, V>> = None;
+            let mut curr = root;
+            loop {
+                // eprintln!("smaller_none({:?}), curr {:?}", key, curr.key);
+                if curr.key < *key {
+                    // search larger
+                    if let Some(larger) = &curr.larger {
+                        // eprintln!("smaller_node({:?}), go larger", key);
+                        candidate = Some(&curr);
+                        curr = larger;
+                    } else {
+                        return Some(&curr);
+                    }
+                } else if curr.key >= *key {
+                    // search smaller
+                    // eprintln!("smaller_node({:?}), go smaller", key);
+                    if let Some(smaller) = &curr.smaller {
+                        curr = smaller;
+                    } else {
+                        return candidate;
+                    }
+                }
+            }
+        } else {
+            None
+        }
+    }
+
+    pub fn smaller(&self, key: &K) -> Option<(&K, &V)> {
+        if let Some(node) = self.smaller_node(key) {
+            Some((&node.key, &node.value))
+        } else {
+            None
+        }
+    }
+
     fn largest_node(&self) -> Option<&TreeNode<K, V>> {
         if let Some(root) = &self.root {
-            root.largest_node()
+            let mut curr = root;
+            while let Some(subnode) = &curr.larger {
+                curr = subnode;
+            }
+            Some(curr)
         } else {
             None
         }
@@ -174,7 +500,29 @@ where
 
     fn larger_node(&self, key: &K) -> Option<&TreeNode<K, V>> {
         if let Some(root) = &self.root {
-            root.larger_node(key)
+            let mut candidate: Option<&TreeNode<K, V>> = None;
+            let mut curr = root;
+            loop {
+                // eprintln!("smaller_none({:?}), curr {:?}", key, curr.key);
+                if curr.key > *key {
+                    // search smaller
+                    if let Some(smaller) = &curr.smaller {
+                        // eprintln!("smaller_node({:?}), go larger", key);
+                        candidate = Some(&curr);
+                        curr = smaller;
+                    } else {
+                        return Some(&curr);
+                    }
+                } else if curr.key <= *key {
+                    // search larger
+                    // eprintln!("smaller_node({:?}), go smaller", key);
+                    if let Some(larger) = &curr.larger {
+                        curr = larger;
+                    } else {
+                        return candidate;
+                    }
+                }
+            }
         } else {
             None
         }
@@ -187,142 +535,6 @@ where
             None
         }
     }
-
-    fn smaller_node(&self, key: &K) -> Option<&TreeNode<K, V>> {
-        if let Some(root) = &self.root {
-            root.smaller_node(key)
-        } else {
-            None
-        }
-    }
-
-    pub fn smaller(&self, key: &K) -> Option<(&K, &V)> {
-        if let Some(node) = self.smaller_node(key) {
-            Some((&node.key, &node.value))
-        } else {
-            None
-        }
-    }
-}
-
-/*
-impl<'a, K, V> Iterator for BTree<'a, K, V>
-where
-    K: PartialOrd,
-    V: Clone,
-{
-    type Item = (&'a K, &'a V);
-
-    fn next(&mut self) -> Option<Self::Item> {
-        if let Some(_curr_node) = &self.iter_pos {
-            unimplemented!()
-        } else {
-            if let Some(node) = self.smallest_node() {
-                self.iter_pos = Some(&node);
-                Some((&node.key, &node.value))
-            } else {
-                None
-            }
-        }
-    }
-}
-*/
-
-#[derive(Debug)]
-struct TreeNode<K: PartialOrd + Debug, V: Clone> {
-    key: K,
-    value: V,
-    smaller: SubNode<K, V>,
-    bigger: SubNode<K, V>,
-}
-
-impl<K, V> TreeNode<K, V>
-where
-    K: PartialOrd + Debug,
-    V: Clone,
-{
-    fn new(key: K, value: V) -> TreeNode<K, V> {
-        TreeNode {
-            key,
-            value,
-            smaller: None,
-            bigger: None,
-        }
-    }
-
-    fn smallest_node(&self) -> Option<&TreeNode<K, V>> {
-        if let Some(smaller) = &self.smaller {
-            smaller.smallest_node()
-        } else {
-            Some(&self)
-        }
-    }
-
-    fn smaller_node(&self, key: &K) -> Option<&TreeNode<K, V>> {
-        if self.key < *key {
-            // search larger
-            if let Some(bigger) = &self.bigger {
-                let res = bigger.smaller_node(key);
-                if res.is_none() {
-                    Some(self)
-                } else {
-                    res
-                }
-            } else {
-                Some(self)
-            }
-        } else {
-            // search smaller
-            if let Some(smaller) = &self.smaller {
-                smaller.smaller_node(key)
-            } else {
-                None
-            }
-        }
-    }
-
-    fn largest_node(&self) -> Option<&TreeNode<K, V>> {
-        if let Some(bigger) = &self.bigger {
-            bigger.largest_node()
-        } else {
-            Some(&self)
-        }
-    }
-
-    fn larger_node(&self, key: &K) -> Option<&TreeNode<K, V>> {
-        if self.key > *key {
-            // search smaller
-            if let Some(smaller) = &self.smaller {
-                let res = smaller.larger_node(key);
-                if res.is_none() {
-                    Some(self)
-                } else {
-                    res
-                }
-            } else {
-                Some(self)
-            }
-        } else {
-            // search larger
-            if let Some(bigger) = &self.bigger {
-                bigger.larger_node(key)
-            } else {
-                None
-            }
-        }
-    }
-
-    fn remove_node(&mut self, _key: &K) -> Option<(bool, V)> {
-        /*        if *key < self.key {
-                   unimplemented!()
-               } else if *key > self.key {
-                   unimplemented!()
-               } else {
-                   Some((true, self.value))
-               }
-        */
-        unimplemented!()
-    }
 }
 
 #[cfg(test)]
@@ -331,38 +543,91 @@ mod test {
 
     #[test]
     fn test_first_level() {
-        let mut tree: BTree<u32, String> = BTree::new();
-        assert_eq!(tree.insert(10, 10.to_string()), None);
-        assert_eq!(tree.insert(10, 10.to_string()), Some(10.to_string()));
-        assert_eq!(tree.find(&10), Some(&10.to_string()));
-        assert_eq!(tree.find(&11), None);
+        let mut tree: BTree<String, String> = BTree::new();
+        assert_eq!(tree.insert(10.to_string(), "v0_10".to_string()), None);
+        assert_eq!(
+            tree.insert(10.to_string(), "v1_10".to_string()),
+            Some("v0_10".to_string())
+        );
+        assert_eq!(tree.find(&"10".to_string()), Some(&"v1_10".to_string()));
+        assert_eq!(tree.find(&"11".to_string()), None);
     }
 
     #[test]
     fn test_next_level() {
-        let values = [10u32, 20, 5, 15, 25, 3, 8];
+        let values = ["10", "20", "05", "15", "25", "03", "08"];
 
-        let mut tree: BTree<u32, String> = BTree::new();
-        for value in values {
-            assert_eq!(tree.insert(value, value.to_string()), None);
-        }
-
+        let mut tree: BTree<String, String> = BTree::new();
         for value in values {
             assert_eq!(
-                tree.insert(value, value.to_string()),
-                Some(value.to_string())
+                tree.insert(value.to_string(), String::from("v1_") + value),
+                None
             );
         }
 
         for value in values {
-            assert_eq!(tree.find(&value), Some(&value.to_string()));
+            assert_eq!(
+                tree.insert(value.to_string(), String::from("v2_") + value),
+                Some(String::from("v1_") + value)
+            );
         }
 
-        assert_eq!(tree.find(&11), None)
+        for value in values {
+            assert_eq!(
+                tree.find(&value.to_string()),
+                Some(&(String::from("v2_") + value))
+            );
+        }
+
+        assert_eq!(tree.find(&11.to_string()), None)
+    }
+
+    #[test]
+    fn test_insert_rec() {
+        let values = ["10", "20", "05", "15", "25", "03", "08"];
+
+        let mut tree: BTree<String, String> = BTree::new();
+        for value in values {
+            assert_eq!(
+                tree.insert_rec(value.to_string(), String::from("v1_") + value),
+                None
+            );
+        }
+        for value in values {
+            assert!(tree.contains(&value.to_string()))
+        }
     }
 
     #[test]
     fn test_remove() {
+        eprintln!("test_remove");
+        let values = [10u32, 20, 5, 15, 25, 3, 8];
+        let mut tree: BTree<u32, String> = BTree::new();
+        for value in values {
+            assert_eq!(tree.insert(value, value.to_string()), None);
+        }
+
+        tree.traverse_print();
+
+        assert_eq!(tree.remove(&10), Some(10.to_string()));
+        assert!(!tree.contains(&10));
+        tree.traverse_print();
+        assert_eq!(tree.remove(&5), Some(5.to_string()));
+        assert!(!tree.contains(&5));
+
+        assert_eq!(tree.remove(&20), Some(20.to_string()));
+        assert!(!tree.contains(&20));
+
+        let values = [10u32, 20, 5];
+        let mut tree: BTree<u32, String> = BTree::new();
+        for value in values {
+            assert_eq!(tree.insert(value, value.to_string()), None);
+        }
+        assert_eq!(tree.remove(&20), Some(20.to_string()));
+        assert!(!tree.contains(&20));
+        assert_eq!(tree.remove(&5), Some(5.to_string()));
+        assert!(!tree.contains(&5));
+
         let values = [10u32, 20, 5, 15, 25, 3, 8];
 
         let mut tree: BTree<u32, String> = BTree::new();
@@ -371,7 +636,9 @@ mod test {
         }
 
         for value in values {
+            eprintln!("remove {} from: {:?}", value, tree);
             assert_eq!(tree.remove(&value), Some(value.to_string()));
+            eprintln!("tree after remove {}: {:?}", value, tree);
             assert_eq!(tree.find(&value), None);
             assert_eq!(tree.remove(&value), None);
         }
@@ -384,7 +651,7 @@ mod test {
         for value in values {
             assert_eq!(tree.insert(value, value.to_string()), None);
         }
-
+        tree.traverse_print();
         for value in values {
             if let Some(found) = tree.find_mut(&value) {
                 *found = (value * 2).to_string();
@@ -400,7 +667,7 @@ mod test {
 
     #[test]
     fn test_smallest() {
-        let values = [10u32, 20, 5, 15, 25, 3, 8];
+        let values = [10u32, 20, 5, 15, 25, 3, 8, 22, 24];
 
         let mut tree: BTree<u32, String> = BTree::new();
         assert_eq!(tree.smallest(), None);
@@ -424,58 +691,80 @@ mod test {
     }
 
     #[test]
-    fn test_larger() {
-        let mut values = [10u32, 20, 5, 15, 25, 3, 8];
-
-        let mut tree: BTree<u32, String> = BTree::new();
-        assert_eq!(tree.smallest(), None);
-        for value in values {
-            assert_eq!(tree.insert(value, value.to_string()), None);
-        }
-
-        values.sort();
-        let mut key = values[0];
-        for index in 1..values.len() {
-            let expected = values[index];
-            if let Some((lkey, lval)) = tree.larger(&key) {
-                eprintln!("looking for larger than {:?}, got {:?}", key, lkey);
-                assert_eq!(expected, *lkey);
-                assert_eq!(expected.to_string(), *lval);
-                key = *lkey;
-            } else {
-                eprintln!("looking for larger than {:?}, got None", key);
-                panic!("expected {}, found None @ key {}", expected, key);
-            }
-        }
-        assert_eq!(tree.larger(&key), None)
-    }
-
-    #[test]
     fn test_smaller() {
         let mut values = [10u32, 20, 5, 15, 25, 3, 8];
 
         let mut tree: BTree<u32, String> = BTree::new();
-        assert_eq!(tree.smallest(), None);
         for value in values {
             assert_eq!(tree.insert(value, value.to_string()), None);
         }
 
         values.sort();
         values.reverse();
-        let mut key = values[0];
-        for index in 1..values.len() {
-            let expected = values[index];
+        let mut iter = values.iter();
+        let mut key = iter.next().expect("No test cases found");
+        for val in iter {
             if let Some((lkey, lval)) = tree.smaller(&key) {
                 eprintln!("looking for smaller than {:?}, got {:?}", key, lkey);
-                assert_eq!(expected, *lkey);
-                assert_eq!(expected.to_string(), *lval);
-                key = *lkey;
+                assert_eq!(val, lkey);
+                assert_eq!(val.to_string(), *lval);
+                key = lkey;
             } else {
                 eprintln!("looking for smaller than {:?}, got None", key);
-                panic!("expected {}, found None @ key {}", expected, key);
+                panic!("expected {}, found None @ key {}", val, key);
             }
         }
-        assert_eq!(tree.smaller(&key), None)
+
+        assert_eq!(tree.smaller(&key), None);
+
+        for val in values {
+            if let Some((lkey, lval)) = tree.smaller(&(val + 1)) {
+                eprintln!("looking for smaller than {:?}, got {:?}", val + 1, lkey);
+                assert_eq!(val, *lkey);
+                assert_eq!(val.to_string(), *lval);
+            } else {
+                eprintln!("looking for smaller than {:?}, got None", key);
+                panic!("expected {}, found None @ key {}", val, key);
+            }
+        }
+    }
+
+    #[test]
+    fn test_larger() {
+        let mut values = [10u32, 20, 5, 15, 25, 3, 8];
+
+        let mut tree: BTree<u32, String> = BTree::new();
+        for value in values {
+            assert_eq!(tree.insert(value, value.to_string()), None);
+        }
+
+        values.sort();
+        let mut iter = values.iter();
+        let mut key = iter.next().expect("empty test array");
+        for val in iter {
+            if let Some((lkey, lval)) = tree.larger(&key) {
+                eprintln!("looking for smaller than {:?}, got {:?}", key, lkey);
+                assert_eq!(val, lkey);
+                assert_eq!(val.to_string(), *lval);
+                key = lkey;
+            } else {
+                eprintln!("looking for smaller than {:?}, got None", key);
+                panic!("expected {}, found None @ key {}", val, key);
+            }
+        }
+
+        assert_eq!(tree.larger(&key), None);
+
+        for val in values {
+            if let Some((lkey, lval)) = tree.larger(&(val - 1)) {
+                eprintln!("looking for smaller than {:?}, got {:?}", val - 1, lkey);
+                assert_eq!(val, *lkey);
+                assert_eq!(val.to_string(), *lval);
+            } else {
+                eprintln!("looking for smaller than {:?}, got None", key);
+                panic!("expected {}, found None @ key {}", val, key);
+            }
+        }
     }
 
     #[test]
@@ -491,5 +780,35 @@ mod test {
             assert_eq!(tree.contains(&val), true);
         }
         assert_eq!(tree.contains(&100), false);
+    }
+
+    #[test]
+    fn test_traverse() {
+        let mut values = [10u32, 20, 5, 15, 25, 3, 8];
+
+        let mut tree: BTree<u32, String> = BTree::new();
+        for value in values {
+            assert_eq!(tree.insert(value, value.to_string()), None);
+        }
+
+        values.sort();
+        let mut iter = values.iter();
+        // let func = ;
+        tree.traverse_asc(&mut move |key: &u32, value: &String| {
+            let xpctd_key = iter.next().expect("unexpected end of values encountered");
+            eprintln!("traverse_asc({:?},{:?})", key, value);
+            assert_eq!(key, xpctd_key);
+            assert_eq!(value, &xpctd_key.to_string());
+        });
+
+        let values = [10u32, 5, 3, 8, 20, 15, 25];
+        let mut iter = values.iter();
+        // let func = ;
+        tree.traverse_top_down(&mut move |key: &u32, value: &String| {
+            let xpctd_key = iter.next().expect("unexpected end of values encountered");
+            eprintln!("traverse_top_down({:?},{:?})", key, value);
+            assert_eq!(key, xpctd_key);
+            assert_eq!(value, &xpctd_key.to_string());
+        });
     }
 }
