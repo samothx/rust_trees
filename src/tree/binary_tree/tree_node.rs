@@ -121,7 +121,7 @@ impl<K: PartialOrd, V> TreeNode<K, V> {
 }
 
 impl<K: PartialOrd + Debug, V: Debug> TreeNode<K, V> {
-    /// print as:
+    /// format as:
     /// (kkk,vvv)
     ///   ├─ (kkk,vvv)
     ///   │   ├─ (kkk,vvv)
@@ -130,7 +130,7 @@ impl<K: PartialOrd + Debug, V: Debug> TreeNode<K, V> {
     ///       ├─ (kkk,vvv)
     ///       └─ (kkk,vvv)
 
-    pub fn to_string(&self, buffer: &mut String, lead: &str, root: bool, smaller: bool) {
+    fn to_str_buffer(&self, buffer: &mut String, lead: &str, root: bool, smaller: bool) {
         const J_SMALLER: &str = " ├─";
         const J_LARGER: &str = " └─";
         const L_SMALLER: &str = " │ ";
@@ -157,16 +157,24 @@ impl<K: PartialOrd + Debug, V: Debug> TreeNode<K, V> {
             };
 
             if let Some(subnode) = &self.smaller {
-                subnode.to_string(buffer, &sub_lead, false, true);
+                subnode.to_str_buffer(buffer, &sub_lead, false, true);
             } else {
                 buffer.push_str(&format!("{}{}nil\n", sub_lead, J_SMALLER));
             }
 
             if let Some(subnode) = &self.larger {
-                subnode.to_string(buffer, &sub_lead, false, false);
+                subnode.to_str_buffer(buffer, &sub_lead, false, false);
             } else {
                 buffer.push_str(&format!("{}{}nil\n", sub_lead, J_LARGER));
             }
         }
+    }
+}
+
+impl<K: PartialOrd + Debug, V: Debug> ToString for TreeNode<K, V> {
+    fn to_string(&self) -> String {
+        let mut buffer = String::new();
+        self.to_str_buffer(&mut buffer, "", true, false);
+        buffer
     }
 }

@@ -639,12 +639,10 @@ mod test {
 
 impl<K: PartialOrd + Debug, V: Debug> Debug for BTree<K, V> {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        let mut res = String::new();
         if let Some(root) = &self.root {
-            root.to_string(&mut res, "", true, false);
+            write!(f, "{}", root.to_string())
         } else {
-            res.push_str("nil");
+            write!(f, "nil")
         }
-        write!(f, "{}", &res)
     }
 }
