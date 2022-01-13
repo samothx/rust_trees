@@ -119,6 +119,37 @@ impl<K: PartialOrd, V> TreeNode<K, V> {
         }
     }
 
+    /// rotate left - larger side moves up
+    /// rotate anti clockwise (in this notation)
+    ///    (self)            (l)
+    ///     ├─<(l)            ├─<(l,l)
+    ///     │   ├─<(l,l)      └─>(self)
+    ///     │   └─>(l,s)          ├─<(l,s)
+    ///     └─>(s)                └─>(s)
+    ///         ├─<(s,l)              ├─<(s,l)
+    ///         └─>(s,s)              └─>(s,s)
+
+    pub fn left_rotate(mut self: Box<Self>) -> std::result::Result<Box<Self>, &'static str> {
+        if self.larger.is_some() {
+            let mut larger = self.larger.take().expect("unexpected empty node 1");
+            self.larger = larger.smaller.take();
+            larger.smaller = Some(self);
+            Ok(larger)
+        } else {
+            Err("cannot left rotate - larger subnode is nil")
+        }
+    }
+
+    /// rotate right - smaller side moves up
+    /// rotate clockwise (in this notation)
+    ///    (self)           (s)
+    ///     ├─<(l)           ├─<(self)
+    ///     │   ├─<(l,l)     │   ├─<(l)
+    ///     │   └─>(l,s)     │   │   ├─<(l,l)
+    ///     └─>(s)           │   │   └─>(l,s)     
+    ///         ├─<(s,l)     │   └─>(s,l)     
+    ///         └─>(s,s)     └─>(s,s)          
+
     pub fn right_rotate(mut self: Box<Self>) -> std::result::Result<Box<Self>, &'static str> {
         if self.smaller.is_some() {
             let mut smaller = self.smaller.take().expect("unexpected empty node 1");
