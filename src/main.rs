@@ -8,7 +8,7 @@ fn main() {
     let mut tree: BTree<u32, String> = BTree::new();
     tree.insert(10u32, "10".to_string());
     // tree.insert(5u32, "5".to_string());
-    println!("{}", tree.to_string());
+    println!("{:?}", &tree);
 
     let mut values = [10u32, 20, 5, 15, 25, 3, 8];
 
@@ -18,7 +18,7 @@ fn main() {
         assert_eq!(tree.insert(value, value.to_string()), None);
     }
 
-    println!("{}", tree.to_string());
+    println!("{:?}", &tree);
 
     values.sort();
     values.reverse();

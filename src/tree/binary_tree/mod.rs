@@ -1,22 +1,21 @@
-use std::fmt::Debug;
+use std::fmt::{Debug, Formatter};
 use tree_node::TreeNode;
 
 type SubNode<K, V> = Option<Box<TreeNode<K, V>>>;
 
 mod tree_node;
 
-#[derive(Debug)]
-pub struct BTree<K: PartialOrd + Debug, V: Debug> {
+pub struct BTree<K: PartialOrd, V> {
     root: SubNode<K, V>,
 }
 
-impl<K: PartialOrd + Debug, V: Debug> Default for BTree<K, V> {
+impl<K: PartialOrd, V> Default for BTree<K, V> {
     fn default() -> Self {
         BTree::new()
     }
 }
 
-impl<K: PartialOrd + Debug, V: Debug> BTree<K, V> {
+impl<K: PartialOrd, V> BTree<K, V> {
     pub fn new() -> BTree<K, V> {
         BTree { root: None }
     }
@@ -67,16 +66,6 @@ impl<K: PartialOrd + Debug, V: Debug> BTree<K, V> {
         if let Some(node) = &self.root {
             node.traverse_asc(func);
         }
-    }
-
-    pub fn to_string(&self) -> String {
-        let mut res = String::new();
-        if let Some(root) = &self.root {
-            root.to_string(&mut res, "", true, false);
-        } else {
-            res.push_str("nil");
-        }
-        res
     }
 
     pub fn contains(&self, key: &K) -> bool {
@@ -447,22 +436,22 @@ mod test {
             assert_eq!(tree.insert(value, value.to_string()), None);
         }
 
-        eprintln!("{}\n", &tree.to_string());
+        eprintln!("{:?}\n", &tree);
 
         assert_eq!(tree.remove(&10), Some(10.to_string()));
         assert!(!tree.contains(&10));
 
-        eprintln!("after remove 10\n{}\n", &tree.to_string());
+        eprintln!("after remove 10\n{:?}\n", &tree);
 
         assert_eq!(tree.remove(&5), Some(5.to_string()));
         assert!(!tree.contains(&5));
 
-        eprintln!("after remove 5\n{}\n", &tree.to_string());
+        eprintln!("after remove 5\n{:?}\n", &tree);
 
         assert_eq!(tree.remove(&20), Some(20.to_string()));
         assert!(!tree.contains(&20));
 
-        eprintln!("after remove 20\n{}\n", &tree.to_string());
+        eprintln!("after remove 20\n{:?}\n", &tree);
 
         let values = [10u32, 20, 5];
         let mut tree: BTree<u32, String> = BTree::new();
@@ -482,9 +471,9 @@ mod test {
         }
 
         for value in values {
-            eprintln!("remove {} from:\n{}\n", value, tree.to_string());
+            eprintln!("remove {} from:\n{:?}\n", value, &tree);
             assert_eq!(tree.remove(&value), Some(value.to_string()));
-            eprintln!("tree after remove {}:\n{}\n", value, tree.to_string());
+            eprintln!("tree after remove {}:\n{:?}\n", value, &tree);
             assert_eq!(tree.find(&value), None);
             assert_eq!(tree.remove(&value), None);
         }
@@ -645,5 +634,17 @@ mod test {
             assert_eq!(key, xpctd_key);
             assert_eq!(value, &xpctd_key.to_string());
         });
+    }
+}
+
+impl<K: PartialOrd + Debug, V: Debug> Debug for BTree<K, V> {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        let mut res = String::new();
+        if let Some(root) = &self.root {
+            root.to_string(&mut res, "", true, false);
+        } else {
+            res.push_str("nil");
+        }
+        write!(f, "{}", &res)
     }
 }

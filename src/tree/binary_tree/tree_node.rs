@@ -2,14 +2,14 @@ use super::SubNode;
 use std::fmt::Debug;
 
 #[derive(Debug)]
-pub struct TreeNode<K: PartialOrd + Debug, V: Debug> {
+pub struct TreeNode<K: PartialOrd, V> {
     pub key: K,
     pub value: V,
     pub smaller: SubNode<K, V>,
     pub larger: SubNode<K, V>,
 }
 
-impl<K: PartialOrd + Debug, V: Debug> TreeNode<K, V> {
+impl<K: PartialOrd, V> TreeNode<K, V> {
     pub fn new(key: K, value: V) -> TreeNode<K, V> {
         TreeNode {
             key,
@@ -118,8 +118,10 @@ impl<K: PartialOrd + Debug, V: Debug> TreeNode<K, V> {
             }
         }
     }
+}
 
-    ///
+impl<K: PartialOrd + Debug, V: Debug> TreeNode<K, V> {
+    /// print as:
     /// (kkk,vvv)
     ///   ├─ (kkk,vvv)
     ///   │   ├─ (kkk,vvv)
