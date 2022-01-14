@@ -150,101 +150,33 @@ impl<K: PartialOrd, V> RBTree<K, V> {
     /// #remove
     /// handles removes on layer 1 & 2 of the tree then uses recursive TreeNode.remove()
     pub fn remove(&mut self, key: &K) -> Option<V> {
-        if self.root.is_some() {
-            // take  & unwrap root to circumnavigate ownership issues
-            // this has to be undone later if root is not being removed
-            let mut root = self.root.take().expect("unexpected empty root");
-            if *key == root.key {
-                // key found at root - remove root
+        match self.root.as_ref().map(|root| root.key == *key) {
+            Some(true) => {
+                // delete the root
+                let mut root = *self.root.take().expect("unexpected empty node");
                 if root.smaller.is_some() {
-                    // root.smaller will be the new root
                     if root.larger.is_some() {
-                        // have to reinsert root.larger
-                        let mut new_root = root.smaller.take().expect("unexpected empty subnode 1");
-                        let _dummy = new_root.insert_node_rec(
-                            root.larger.take().expect("unexpected empty subnode 2"),
-                        );
+                        let mut new_root = root.smaller.take().expect("unexpected empty node");
+                        new_root
+                            .insert_node_rec(root.larger.take().expect("unexpected empty node"));
                         self.root = Some(new_root);
                     } else {
                         self.root = root.smaller;
                     }
                 } else if root.larger.is_some() {
-                    // root.larger will be the new root
                     self.root = root.larger;
                 }
                 Some(root.value)
-            } else if *key < root.key {
-                if root.smaller.is_some() {
-                    // same as above - take & unwrap the value that might or might not be removed
-                    // this has to be undone later if root.smaller is not being removed
-                    let mut smaller = root.smaller.take().expect("unexpected empty subnode 3");
-                    if *key == smaller.key {
-                        // remove root.smaller - it is already unchained - now chain up its children
-                        if smaller.smaller.is_some() {
-                            // smaller.smaller will be the new root.smaller
-                            if smaller.larger.is_some() {
-                                // have to reinsert smaller.larger first
-                                let mut ins_root =
-                                    smaller.smaller.take().expect("unexpected empty subnode 4");
-                                let _dummy = ins_root.insert_node_rec(
-                                    smaller.larger.take().expect("unexpected empty subnode 5"),
-                                );
-                                root.smaller = Some(ins_root);
-                            } else {
-                                root.smaller = smaller.smaller;
-                            }
-                        } else {
-                            // smaller.larger will be the new root.smaller
-                            root.smaller = smaller.larger;
-                        }
-                        self.root = Some(root);
-                        Some(smaller.value)
-                    } else {
-                        let res = smaller.remove(key);
-                        root.smaller = Some(smaller);
-                        self.root = Some(root);
-                        res
-                    }
+            }
+            Some(false) => {
+                // let the root/siblings node delete matching siblings recursively
+                if let Some(root) = &mut self.root {
+                    root.remove(key)
                 } else {
-                    self.root = Some(root);
-                    None
-                }
-            } else {
-                if root.larger.is_some() {
-                    // same as above - take & unwrap the value that might or might not be removed
-                    // this has to be undone later if root.larger is not being removed
-                    let mut larger = root.larger.take().expect("unexpected empty subnode 6");
-                    if *key == larger.key {
-                        // remove smaller
-                        if larger.smaller.is_some() {
-                            if larger.larger.is_some() {
-                                let mut ins_node =
-                                    larger.smaller.take().expect("unexpected empty subnode 7");
-                                let _dummy = ins_node.insert_node_rec(
-                                    larger.larger.take().expect("unexpected empty subnode 8"),
-                                );
-                                root.larger = Some(ins_node);
-                            } else {
-                                root.larger = larger.smaller;
-                            }
-                        } else {
-                            root.larger = larger.larger;
-                        }
-                        self.root = Some(root);
-                        Some(larger.value)
-                    } else {
-                        let res = larger.remove(key);
-                        root.larger = Some(larger);
-                        self.root = Some(root);
-                        res
-                    }
-                } else {
-                    self.root = Some(root);
                     None
                 }
             }
-        } else {
-            None
+            None => None,
         }
     }
 
@@ -262,11 +194,7 @@ impl<K: PartialOrd, V> RBTree<K, V> {
 
     // TODO: add a mut version returning Option<(&K, &mut V)> ?
     pub fn smallest(&self) -> Option<(&K, &V)> {
-        if let Some(node) = self.smallest_node() {
-            Some((&node.key, &node.value))
-        } else {
-            None
-        }
+        self.smallest_node().map(|node| (&node.key, &node.value))
     }
 
     fn smaller_node(&self, key: &K) -> Option<&TreeNode<K, V>> {
@@ -279,10 +207,10 @@ impl<K: PartialOrd, V> RBTree<K, V> {
                     // search larger
                     if let Some(larger) = &curr.larger {
                         // eprintln!("smaller_node({:?}), go larger", key);
-                        candidate = Some(&curr);
+                        candidate = Some(curr);
                         curr = larger;
                     } else {
-                        return Some(&curr);
+                        return Some(curr);
                     }
                 } else if curr.key >= *key {
                     // search smaller
@@ -300,11 +228,7 @@ impl<K: PartialOrd, V> RBTree<K, V> {
     }
 
     pub fn smaller(&self, key: &K) -> Option<(&K, &V)> {
-        if let Some(node) = self.smaller_node(key) {
-            Some((&node.key, &node.value))
-        } else {
-            None
-        }
+        self.smaller_node(key).map(|node| (&node.key, &node.value))
     }
 
     fn largest_node(&self) -> Option<&TreeNode<K, V>> {
@@ -320,11 +244,7 @@ impl<K: PartialOrd, V> RBTree<K, V> {
     }
 
     pub fn largest(&self) -> Option<(&K, &V)> {
-        if let Some(node) = self.largest_node() {
-            Some((&node.key, &node.value))
-        } else {
-            None
-        }
+        self.largest_node().map(|node| (&node.key, &node.value))
     }
 
     fn larger_node(&self, key: &K) -> Option<&TreeNode<K, V>> {
@@ -337,10 +257,10 @@ impl<K: PartialOrd, V> RBTree<K, V> {
                     // search smaller
                     if let Some(smaller) = &curr.smaller {
                         // eprintln!("smaller_node({:?}), go larger", key);
-                        candidate = Some(&curr);
+                        candidate = Some(curr);
                         curr = smaller;
                     } else {
-                        return Some(&curr);
+                        return Some(curr);
                     }
                 } else if curr.key <= *key {
                     // search larger
@@ -358,11 +278,7 @@ impl<K: PartialOrd, V> RBTree<K, V> {
     }
 
     pub fn larger(&self, key: &K) -> Option<(&K, &V)> {
-        if let Some(node) = self.larger_node(key) {
-            Some((&node.key, &node.value))
-        } else {
-            None
-        }
+        self.larger_node(key).map(|node| (&node.key, &node.value))
     }
 }
 

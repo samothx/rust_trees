@@ -70,8 +70,11 @@ pub mod linked_list {
 
     pub struct IntoIter<T>(LinkedList<T>);
 
-    impl<T> LinkedList<T> {
-        pub fn into_iter(self) -> IntoIter<T> {
+    impl<T> IntoIterator for LinkedList<T> {
+        type Item = T;
+        type IntoIter = IntoIter<T>;
+
+        fn into_iter(self) -> IntoIter<T> {
             IntoIter(self)
         }
     }

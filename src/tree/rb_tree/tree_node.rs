@@ -51,71 +51,37 @@ impl<K: PartialOrd, V> TreeNode<K, V> {
     }
 
     pub fn remove(&mut self, key: &K) -> Option<V> {
-        // key == self.key is not expected - that case is to be handled upstream
-        // this is only about removing self.smaller/self.larger from self
-
-        if *key < self.key {
-            // we are working on the smaller link
-            if self.smaller.is_some() {
-                // decouple smaller from self.smaller
-                let mut subnode = self.smaller.take().unwrap();
-                if *key == subnode.key {
-                    // subnode is already removed above, so take care of its children
-                    if subnode.smaller.is_some() {
-                        if subnode.larger.is_some() {
-                            let mut new_smaller =
-                                subnode.smaller.take().expect("unexpected empty node 1");
-                            let _ = new_smaller.insert_node_rec(
-                                subnode.larger.take().expect("unexpected empty node 2"),
-                            );
-                            self.smaller = Some(new_smaller);
-                        } else {
-                            self.smaller = subnode.smaller;
-                        }
-                    } else if subnode.larger.is_some() {
-                        self.smaller = subnode.larger;
-                    }
-                    Some(subnode.value)
-                } else {
-                    let res = subnode.remove(key);
-                    // restore the link decoupled earlier
-                    self.smaller = Some(subnode);
-                    res
-                }
-            } else {
-                None
-            }
+        // remove only subnodes - this node has beech checked upstream
+        let child_link = if *key < self.key {
+            &mut self.smaller
         } else {
-            // we are working on the larger link
-            if self.larger.is_some() {
-                // decouple smaller from self.smaller
-                let mut subnode = self.larger.take().unwrap();
-                if *key == subnode.key {
-                    // subnode is already removed above, so take care of its children
-                    if subnode.smaller.is_some() {
-                        if subnode.larger.is_some() {
-                            let mut new_larger =
-                                subnode.smaller.take().expect("unexpected empty node 3");
-                            let _ = new_larger.insert_node_rec(
-                                subnode.larger.take().expect("unexpected empty node 4"),
-                            );
-                            self.larger = Some(new_larger)
-                        } else {
-                            self.larger = subnode.smaller;
-                        }
-                    } else if subnode.larger.is_some() {
-                        self.larger = subnode.larger;
+            &mut self.larger
+        };
+
+        match child_link.as_ref().map(|node| node.key == *key) {
+            Some(true) => {
+                // remove child
+                let mut child = child_link.take().expect("unexpected empty link");
+                if child.smaller.is_some() {
+                    let mut new_child = child.smaller.take().expect("unexpected empty link");
+                    if child.larger.is_some() {
+                        new_child
+                            .insert_node_rec(child.larger.take().expect("unexpected empty link"));
                     }
-                    Some(subnode.value)
-                } else {
-                    let res = subnode.remove(key);
-                    // restore the link decoupled earlier
-                    self.larger = Some(subnode);
-                    res
+                    *child_link = Some(new_child);
+                } else if child.larger.is_some() {
+                    *child_link = child.larger;
                 }
-            } else {
-                None
+                Some(child.value)
             }
+            Some(false) => {
+                if let Some(node) = child_link {
+                    node.remove(key)
+                } else {
+                    None
+                }
+            }
+            None => None,
         }
     }
 
