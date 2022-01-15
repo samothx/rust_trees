@@ -372,22 +372,6 @@ mod test {
     }
 
     #[test]
-    fn test_insert_rec() {
-        let values = ["10", "20", "05", "15", "25", "03", "08"];
-
-        let mut tree: RBTree<String, String> = RBTree::new();
-        for value in values {
-            assert_eq!(
-                tree.insert(value.to_string(), String::from("v1_") + value),
-                None
-            );
-        }
-        for value in values {
-            assert!(tree.contains(&value.to_string()))
-        }
-    }
-
-    #[test]
     fn test_remove() {
         eprintln!("test_remove");
         let values = [10u32, 20, 5, 15, 25, 3, 8, 4, 1, 9, 6, 13, 17, 22, 27];
@@ -400,6 +384,9 @@ mod test {
 
         assert_eq!(tree.remove(&10), Some(10.to_string()));
         assert!(!tree.contains(&10));
+        if let Err(msg) = tree.check_rules() {
+            panic!("invalid tree after remove {}: {}", 10, msg);
+        }
 
         eprintln!("after remove 10\n{:?}\n", &tree);
 
@@ -610,7 +597,7 @@ mod test {
             }
             // eprintln!("after insert ascending {}\n{:?}", val, tree);
         }
-        eprintln!("after insert ascending\n{:?}", tree);
+        // eprintln!("after insert ascending\n{:?}", tree);
 
         let mut count = 0;
         let mut cref = &mut count;
@@ -632,7 +619,7 @@ mod test {
 
             // eprintln!("after insert descending {}\n{:?}", val, tree);
         }
-        eprintln!("after insert descending\n{:?}", tree);
+        // eprintln!("after insert descending\n{:?}", tree);
 
         let mut count = 0;
         let mut cref = &mut count;
@@ -646,7 +633,7 @@ mod test {
         let mut tree = RBTree::new();
         let mut rng = rand::thread_rng();
 
-        eprintln!("testing random tree");
+        // eprintln!("testing random tree");
         const MAX: u32 = 10000;
         let mut entries = Vec::new();
         for _ in 1..=MAX {
@@ -673,7 +660,11 @@ mod test {
         tree.traverse_asc(&mut move |_key: &u32, _value: &String| {
             *cref += 1;
         });
-        assert_eq!(count, MAX, "invalid node count");
+        assert_eq!(
+            count, MAX,
+            "invalid node count {}, should be {}",
+            count, MAX
+        );
 
         // eprintln!("after random insert\n{:?}", tree);
         for val in entries {

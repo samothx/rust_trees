@@ -265,8 +265,8 @@ impl<K: PartialOrd + Debug, V> RBTreeNode<K, V> {
         mut self: Box<Self>,
     ) -> std::result::Result<Box<Self>, (Box<Self>, &'static str)> {
         if self.larger.is_some() {
-            self.color = Color::Red;
             let mut larger = self.larger.take().expect("unexpected empty link");
+            self.color = Color::Red;
             let mut new_root =
                 if let Some(true) = larger.smaller.as_ref().map(|node| node.color == Color::Red) {
                     //  do a modified right rotate on larger.larger, larger, larger.smaller
@@ -302,8 +302,8 @@ impl<K: PartialOrd + Debug, V> RBTreeNode<K, V> {
         mut self: Box<Self>,
     ) -> std::result::Result<Box<Self>, (Box<Self>, &'static str)> {
         if self.smaller.is_some() {
-            self.color = Color::Red;
             let mut smaller = self.smaller.take().expect("unexpected empty link");
+            self.color = Color::Red;
             let mut new_root =
                 if let Some(true) = smaller.larger.as_ref().map(|node| node.color == Color::Red) {
                     //  do a modified left rotate on smaller.larger, larger, larger.smaller
@@ -344,7 +344,12 @@ impl<K: PartialOrd + Debug, V: Debug> RBTreeNode<K, V> {
 
         // buffer.push_str(&format!("lead: '{}'\n", lead));
 
-        let node_str = format!("({:?},{:?})", self.key, self.value);
+        let node_str = format!(
+            "{}({:?},{:?})",
+            if self.color == Color::Red { "R" } else { "B" },
+            self.key,
+            self.value
+        );
         let node_str = match self.color {
             Color::Red => node_str.red().to_string(),
             Color::Black => node_str.blue().to_string(),
