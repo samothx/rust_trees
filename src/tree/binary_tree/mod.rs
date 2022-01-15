@@ -145,33 +145,39 @@ impl<K: PartialOrd, V> BTree<K, V> {
     }
 
     pub fn remove(&mut self, key: &K) -> Option<V> {
-        match self.root.as_ref().map(|root| root.key == *key) {
-            Some(true) => {
-                // delete the root
-                let mut root = *self.root.take().expect("unexpected empty node");
-                if root.smaller.is_some() {
-                    if root.larger.is_some() {
-                        let mut new_root = root.smaller.take().expect("unexpected empty node");
-                        new_root
-                            .insert_node_rec(root.larger.take().expect("unexpected empty node"));
-                        self.root = Some(new_root);
-                    } else {
-                        self.root = root.smaller;
-                    }
-                } else if root.larger.is_some() {
-                    self.root = root.larger;
-                }
-                Some(root.value)
-            }
-            Some(false) => {
-                // let the root/siblings node delete matching siblings recursively
-                if let Some(root) = &mut self.root {
-                    root.remove(key)
+        if let Some(true) = self.root.as_ref().map(|root| root.key == *key) {
+            // delete the root
+            let mut root = self.root.take().expect("unexpected empty link");
+            let (res, new_root) = if root.smaller.is_some() {
+                if root.larger.is_some() {
+                    // root has two siblings - swap root with next larger, delete next larger
+                    let (key, value) = root.remove_next_larger();
+                    root.key = key;
+                    let res = std::mem::replace(&mut root.value, value);
+                    (Some(res), Some(root))
                 } else {
-                    None
+                    // root becomes root.smaller
+                    (Some(root.value), root.smaller.take())
                 }
+            } else {
+                if root.larger.is_some() {
+                    // root becomes root.larger
+                    (Some(root.value), root.larger.take())
+                } else {
+                    // the tree is empty
+                    (Some(root.value), None)
+                }
+            };
+            if new_root.is_some() {
+                self.root = new_root;
             }
-            None => None,
+            res
+        } else {
+            if let Some(root) = &mut self.root {
+                root.remove(key)
+            } else {
+                None
+            }
         }
     }
 
@@ -277,12 +283,22 @@ impl<K: PartialOrd, V> BTree<K, V> {
     }
 }
 
+impl<K: PartialOrd + Debug, V: Debug> Debug for BTree<K, V> {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        if let Some(root) = &self.root {
+            write!(f, "{}", root.to_string())
+        } else {
+            write!(f, "nil")
+        }
+    }
+}
+
 #[cfg(test)]
 mod test {
     use super::*;
 
     #[test]
-    fn test_first_level() {
+    fn bt_test_first_level() {
         let mut tree: BTree<String, String> = BTree::new();
         assert_eq!(tree.insert(10.to_string(), "v0_10".to_string()), None);
         assert_eq!(
@@ -294,7 +310,7 @@ mod test {
     }
 
     #[test]
-    fn test_next_level() {
+    fn bt_test_next_level() {
         let values = ["10", "20", "05", "15", "25", "03", "08"];
 
         let mut tree: BTree<String, String> = BTree::new();
@@ -323,7 +339,7 @@ mod test {
     }
 
     #[test]
-    fn test_insert_rec() {
+    fn bt_test_insert_rec() {
         let values = ["10", "20", "05", "15", "25", "03", "08"];
 
         let mut tree: BTree<String, String> = BTree::new();
@@ -339,7 +355,7 @@ mod test {
     }
 
     #[test]
-    fn test_remove() {
+    fn bt_test_remove() {
         eprintln!("test_remove");
         let values = [10u32, 20, 5, 15, 25, 3, 8, 4, 1, 9, 6, 13, 17, 22, 27];
         let mut tree: BTree<u32, String> = BTree::new();
@@ -350,6 +366,16 @@ mod test {
         eprintln!("{:?}\n", &tree);
 
         assert_eq!(tree.remove(&10), Some(10.to_string()));
+        let mut last: Option<u32> = None;
+        tree.traverse_asc(&mut move |key, _value| {
+            if let Some(value) = last {
+                if value >= *key {
+                    panic!("last >= curr")
+                }
+            }
+            last = Some(*key);
+        });
+
         assert!(!tree.contains(&10));
 
         eprintln!("after remove 10\n{:?}\n", &tree);
@@ -391,7 +417,7 @@ mod test {
     }
 
     #[test]
-    fn test_mut() {
+    fn bt_test_find_mut() {
         let values = [10u32, 20, 5, 15, 25, 3, 8];
         let mut tree: BTree<u32, String> = BTree::new();
         for value in values {
@@ -411,7 +437,7 @@ mod test {
     }
 
     #[test]
-    fn test_smallest() {
+    fn bt_test_smallest() {
         let values = [10u32, 20, 5, 15, 25, 3, 8, 22, 24];
 
         let mut tree: BTree<u32, String> = BTree::new();
@@ -423,7 +449,7 @@ mod test {
     }
 
     #[test]
-    fn test_largest() {
+    fn bt_test_largest() {
         let values = [10u32, 20, 5, 15, 25, 3, 8];
 
         let mut tree: BTree<u32, String> = BTree::new();
@@ -436,7 +462,7 @@ mod test {
     }
 
     #[test]
-    fn test_smaller() {
+    fn bt_test_smaller() {
         let mut values = [10u32, 20, 5, 15, 25, 3, 8];
 
         let mut tree: BTree<u32, String> = BTree::new();
@@ -475,7 +501,7 @@ mod test {
     }
 
     #[test]
-    fn test_larger() {
+    fn bt_test_larger() {
         let mut values = [10u32, 20, 5, 15, 25, 3, 8];
 
         let mut tree: BTree<u32, String> = BTree::new();
@@ -513,7 +539,7 @@ mod test {
     }
 
     #[test]
-    fn test_contains() {
+    fn bt_test_contains() {
         let values = [10u32, 20, 5, 15, 25, 3, 8];
 
         let mut tree: BTree<u32, String> = BTree::new();
@@ -528,7 +554,7 @@ mod test {
     }
 
     #[test]
-    fn test_traverse() {
+    fn bt_test_traverse() {
         let mut values = [10u32, 20, 5, 15, 25, 3, 8];
 
         let mut tree: BTree<u32, String> = BTree::new();
@@ -545,15 +571,5 @@ mod test {
             assert_eq!(key, xpctd_key);
             assert_eq!(value, &xpctd_key.to_string());
         });
-    }
-}
-
-impl<K: PartialOrd + Debug, V: Debug> Debug for BTree<K, V> {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        if let Some(root) = &self.root {
-            write!(f, "{}", root.to_string())
-        } else {
-            write!(f, "nil")
-        }
     }
 }

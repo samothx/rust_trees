@@ -1,4 +1,3 @@
-use colored::Colorize;
 use rand::Rng;
 use rust_tree::tree::rb_tree::RBTree;
 

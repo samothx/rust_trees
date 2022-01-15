@@ -331,7 +331,7 @@ mod test {
     use rand::Rng;
 
     #[test]
-    fn test_first_level() {
+    fn rb_test_first_level() {
         let mut tree: RBTree<String, String> = RBTree::new();
         assert_eq!(tree.insert(10.to_string(), "v0_10".to_string()), None);
         assert_eq!(
@@ -343,7 +343,7 @@ mod test {
     }
 
     #[test]
-    fn test_next_level() {
+    fn rb_test_next_level() {
         let values = ["10", "20", "05", "15", "25", "03", "08"];
 
         let mut tree: RBTree<String, String> = RBTree::new();
@@ -372,7 +372,7 @@ mod test {
     }
 
     #[test]
-    fn test_remove() {
+    fn rb_test_remove() {
         eprintln!("test_remove");
         let values = [10u32, 20, 5, 15, 25, 3, 8, 4, 1, 9, 6, 13, 17, 22, 27];
         let mut tree: RBTree<u32, String> = RBTree::new();
@@ -427,7 +427,7 @@ mod test {
     }
 
     #[test]
-    fn test_mut() {
+    fn rb_test_find_mut() {
         let values = [10u32, 20, 5, 15, 25, 3, 8];
         let mut tree: RBTree<u32, String> = RBTree::new();
         for value in values {
@@ -447,7 +447,7 @@ mod test {
     }
 
     #[test]
-    fn test_smallest() {
+    fn rb_test_smallest() {
         let values = [10u32, 20, 5, 15, 25, 3, 8, 22, 24];
 
         let mut tree: RBTree<u32, String> = RBTree::new();
@@ -459,7 +459,7 @@ mod test {
     }
 
     #[test]
-    fn test_largest() {
+    fn rb_test_largest() {
         let values = [10u32, 20, 5, 15, 25, 3, 8];
 
         let mut tree: RBTree<u32, String> = RBTree::new();
@@ -472,7 +472,7 @@ mod test {
     }
 
     #[test]
-    fn test_smaller() {
+    fn rb_test_smaller() {
         let mut values = [10u32, 20, 5, 15, 25, 3, 8];
 
         let mut tree: RBTree<u32, String> = RBTree::new();
@@ -511,7 +511,7 @@ mod test {
     }
 
     #[test]
-    fn test_larger() {
+    fn rb_test_larger() {
         let mut values = [10u32, 20, 5, 15, 25, 3, 8];
 
         let mut tree: RBTree<u32, String> = RBTree::new();
@@ -549,7 +549,7 @@ mod test {
     }
 
     #[test]
-    fn test_contains() {
+    fn rb_test_contains() {
         let values = [10u32, 20, 5, 15, 25, 3, 8];
 
         let mut tree: RBTree<u32, String> = RBTree::new();
@@ -564,7 +564,7 @@ mod test {
     }
 
     #[test]
-    fn test_traverse() {
+    fn rb_test_traverse() {
         let mut values = [10u32, 20, 5, 15, 25, 3, 8];
 
         let mut tree: RBTree<u32, String> = RBTree::new();
@@ -584,7 +584,7 @@ mod test {
     }
 
     #[test]
-    fn test_insert_rb() {
+    fn rb_test_insert() {
         let mut tree = RBTree::new();
         for val in 1..=100 {
             assert_eq!(tree.insert(val, val.to_string()), None);

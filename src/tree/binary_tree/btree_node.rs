@@ -63,36 +63,77 @@ impl<K: PartialOrd, V> BTreeNode<K, V> {
 
     pub fn remove(&mut self, key: &K) -> Option<V> {
         // remove only subnodes - this node has beech checked upstream
+        #[cfg(test)]
+        if self.key == *key {
+            panic!("BTreeNode.remove() cannot semove self");
+        }
+
         let child_link = if *key < self.key {
             &mut self.smaller
         } else {
             &mut self.larger
         };
 
-        match child_link.as_ref().map(|node| node.key == *key) {
-            Some(true) => {
-                // remove child
-                let mut child = child_link.take().expect("unexpected empty link");
-                if child.smaller.is_some() {
-                    let mut new_child = child.smaller.take().expect("unexpected empty link");
-                    if child.larger.is_some() {
-                        new_child
-                            .insert_node_rec(child.larger.take().expect("unexpected empty link"));
-                    }
-                    *child_link = Some(new_child);
-                } else if child.larger.is_some() {
-                    *child_link = child.larger;
+        if let Some(true) = child_link.as_ref().map(|root| root.key == *key) {
+            // delete the root
+            let mut child = child_link.take().expect("unexpected empty link");
+            let (res, new_child) = if child.smaller.is_some() {
+                if child.larger.is_some() {
+                    // root has two siblings - swap root with next larger, delete next larger
+                    let (key, value) = child.remove_next_larger();
+                    child.key = key;
+                    let res = std::mem::replace(&mut child.value, value);
+                    (Some(res), Some(child))
+                } else {
+                    // root becomes root.smaller
+                    (Some(child.value), child.smaller.take())
                 }
-                Some(child.value)
+            } else {
+                if child.larger.is_some() {
+                    // root becomes root.larger
+                    (Some(child.value), child.larger.take())
+                } else {
+                    // the tree is empty
+                    (Some(child.value), None)
+                }
+            };
+            if new_child.is_some() {
+                *child_link = new_child;
+            }
+            res
+        } else {
+            if let Some(child) = child_link {
+                child.remove(key)
+            } else {
+                None
+            }
+        }
+    }
+
+    pub fn remove_next_larger(&mut self) -> (K, V) {
+        match self.larger.as_ref().map(|node| node.smaller.is_some()) {
+            Some(true) => {
+                // larger has smaller siblings - find the smallest one
+                let mut curr = self.larger.as_mut().expect("unexpected empty link");
+                while let Some(true) = curr.smaller.as_ref().map(|node| node.smaller.is_some()) {
+                    curr = curr.smaller.as_mut().expect("unexpected empty link");
+                }
+                // current is the parent of the smallest node
+                let smallest = curr.smaller.take().expect("unexpected empty node");
+                if smallest.larger.is_some() {
+                    curr.smaller = smallest.larger;
+                }
+                (smallest.key, smallest.value)
             }
             Some(false) => {
-                if let Some(node) = child_link {
-                    node.remove(key)
-                } else {
-                    None
+                // self.larger has no smaller siblings - larger is the one
+                let larger = self.larger.take().expect("unexpected empty link");
+                if larger.larger.is_some() {
+                    self.larger = larger.larger;
                 }
+                (larger.key, larger.value)
             }
-            None => None,
+            None => panic!("remove_next_larger - no larger subnode exists"),
         }
     }
 }
