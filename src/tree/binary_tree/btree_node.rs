@@ -1,16 +1,17 @@
 use super::SubNode;
+
 use std::fmt::Debug;
 
-pub struct TreeNode<K: PartialOrd, V> {
+pub struct BTreeNode<K: PartialOrd, V> {
     pub key: K,
     pub value: V,
     pub smaller: SubNode<K, V>,
     pub larger: SubNode<K, V>,
 }
 
-impl<K: PartialOrd, V> TreeNode<K, V> {
-    pub fn new(key: K, value: V) -> TreeNode<K, V> {
-        TreeNode {
+impl<K: PartialOrd, V> BTreeNode<K, V> {
+    pub fn new(key: K, value: V) -> BTreeNode<K, V> {
+        BTreeNode {
             key,
             value,
             smaller: None,
@@ -18,7 +19,7 @@ impl<K: PartialOrd, V> TreeNode<K, V> {
         }
     }
 
-    pub fn insert_node_rec(&mut self, node: Box<TreeNode<K, V>>) -> Option<V> {
+    pub fn insert_node_rec(&mut self, node: Box<BTreeNode<K, V>>) -> Option<V> {
         if node.key < self.key {
             if let Some(smaller) = &mut self.smaller {
                 smaller.insert_node_rec(node)
@@ -96,7 +97,7 @@ impl<K: PartialOrd, V> TreeNode<K, V> {
     }
 }
 
-impl<K: PartialOrd + Debug, V: Debug> TreeNode<K, V> {
+impl<K: PartialOrd + Debug, V: Debug> BTreeNode<K, V> {
     /// format as:
     /// (kkk,vvv)
     ///   ├─<(kkk,vvv)
@@ -147,7 +148,7 @@ impl<K: PartialOrd + Debug, V: Debug> TreeNode<K, V> {
     }
 }
 
-impl<K: PartialOrd + Debug, V: Debug> ToString for TreeNode<K, V> {
+impl<K: PartialOrd + Debug, V: Debug> ToString for BTreeNode<K, V> {
     fn to_string(&self) -> String {
         let mut buffer = String::new();
         self.to_str_buffer(&mut buffer, "", true, false);

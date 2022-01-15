@@ -1,9 +1,9 @@
+use btree_node::BTreeNode;
 use std::fmt::{Debug, Formatter};
-use tree_node::TreeNode;
 
-type SubNode<K, V> = Option<Box<TreeNode<K, V>>>;
+type SubNode<K, V> = Option<Box<BTreeNode<K, V>>>;
 
-mod tree_node;
+mod btree_node;
 
 pub struct BTree<K: PartialOrd, V> {
     root: SubNode<K, V>,
@@ -15,16 +15,15 @@ impl<K: PartialOrd, V> Default for BTree<K, V> {
     }
 }
 
-impl<K: PartialOrd + Debug, V: Debug> BTree<K, V> {}
 impl<K: PartialOrd, V> BTree<K, V> {
     pub fn new() -> BTree<K, V> {
         BTree { root: None }
     }
 
-    // TODO: add size, contains, remove, iterator, try_insert, adapt to std collection api
+    // TODO: add size, iterator, try_insert, adapt to std collection api
 
     pub fn insert_rec(&mut self, key: K, value: V) -> Option<V> {
-        let new_node = Box::new(TreeNode::new(key, value));
+        let new_node = Box::new(BTreeNode::new(key, value));
         if let Some(node) = &mut self.root {
             node.insert_node_rec(new_node)
         } else {
@@ -41,7 +40,7 @@ impl<K: PartialOrd, V> BTree<K, V> {
                     match &mut curr.smaller {
                         Some(node) => curr = node,
                         smaller @ None => {
-                            *smaller = Some(Box::new(TreeNode::new(key, value)));
+                            *smaller = Some(Box::new(BTreeNode::new(key, value)));
                             return None;
                         }
                     }
@@ -49,7 +48,7 @@ impl<K: PartialOrd, V> BTree<K, V> {
                     match &mut curr.larger {
                         Some(node) => curr = node,
                         larger @ None => {
-                            *larger = Some(Box::new(TreeNode::new(key, value)));
+                            *larger = Some(Box::new(BTreeNode::new(key, value)));
                             return None;
                         }
                     }
@@ -58,7 +57,7 @@ impl<K: PartialOrd, V> BTree<K, V> {
                 }
             }
         } else {
-            self.root = Some(Box::new(TreeNode::new(key, value)));
+            self.root = Some(Box::new(BTreeNode::new(key, value)));
             None
         }
     }
@@ -176,7 +175,7 @@ impl<K: PartialOrd, V> BTree<K, V> {
         }
     }
 
-    fn smallest_node(&self) -> Option<&TreeNode<K, V>> {
+    fn smallest_node(&self) -> Option<&BTreeNode<K, V>> {
         if let Some(root) = &self.root {
             let mut curr = root;
             while let Some(subnode) = &curr.smaller {
@@ -193,9 +192,9 @@ impl<K: PartialOrd, V> BTree<K, V> {
         self.smallest_node().map(|node| (&node.key, &node.value))
     }
 
-    fn smaller_node(&self, key: &K) -> Option<&TreeNode<K, V>> {
+    fn smaller_node(&self, key: &K) -> Option<&BTreeNode<K, V>> {
         if let Some(root) = &self.root {
-            let mut candidate: Option<&TreeNode<K, V>> = None;
+            let mut candidate: Option<&BTreeNode<K, V>> = None;
             let mut curr = root;
             loop {
                 // eprintln!("smaller_none({:?}), curr {:?}", key, curr.key);
@@ -227,7 +226,7 @@ impl<K: PartialOrd, V> BTree<K, V> {
         self.smaller_node(key).map(|node| (&node.key, &node.value))
     }
 
-    fn largest_node(&self) -> Option<&TreeNode<K, V>> {
+    fn largest_node(&self) -> Option<&BTreeNode<K, V>> {
         if let Some(root) = &self.root {
             let mut curr = root;
             while let Some(subnode) = &curr.larger {
@@ -243,9 +242,9 @@ impl<K: PartialOrd, V> BTree<K, V> {
         self.largest_node().map(|node| (&node.key, &node.value))
     }
 
-    fn larger_node(&self, key: &K) -> Option<&TreeNode<K, V>> {
+    fn larger_node(&self, key: &K) -> Option<&BTreeNode<K, V>> {
         if let Some(root) = &self.root {
-            let mut candidate: Option<&TreeNode<K, V>> = None;
+            let mut candidate: Option<&BTreeNode<K, V>> = None;
             let mut curr = root;
             loop {
                 // eprintln!("smaller_none({:?}), curr {:?}", key, curr.key);

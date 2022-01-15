@@ -1,29 +1,97 @@
+use crate::tree::rb_tree::rbtree_node::Color;
+// use rand::Rng;
+use rbtree_node::RBTreeNode;
 use std::fmt::{Debug, Formatter};
-use tree_node::TreeNode;
 
-mod tree_node;
+mod rbtree_node;
 
-type SubNode<K, V> = Option<Box<TreeNode<K, V>>>;
+type SubNode<K, V> = Option<Box<RBTreeNode<K, V>>>;
+
+#[derive(PartialEq, Debug)]
+pub enum Branch {
+    Smaller,
+    Larger,
+}
+
+#[derive(PartialEq, Debug)]
+pub enum InsertState {
+    Clean,
+    RightConflict,
+    LeftConflict,
+    LeftRotate,
+    RightRotate,
+    ChgdColor,
+}
 
 pub struct RBTree<K: PartialOrd, V> {
     root: SubNode<K, V>,
 }
 
-impl<K: PartialOrd, V> Default for RBTree<K, V> {
+impl<K: PartialOrd + Debug, V: Debug> Default for RBTree<K, V> {
     fn default() -> Self {
         RBTree::new()
     }
 }
 
-impl<K: PartialOrd, V> RBTree<K, V> {
+// impl<K: PartialOrd + Debug, V: Debug> RBTree<K, V> {
+
+impl<K: PartialOrd + Debug, V: Debug> RBTree<K, V> {
     pub fn new() -> RBTree<K, V> {
         RBTree { root: None }
     }
 
-    // TODO: add size, contains, remove, iterator, try_insert, adapt to std collection api
+    pub fn insert_rec_rb(&mut self, key: K, value: V) -> Option<V> {
+        let (res, insert_state) = if let Some(root) = &mut self.root {
+            root.insert_node_rb(Box::new(RBTreeNode::new(key, value)), true)
+        } else {
+            self.root = Some(Box::new(RBTreeNode::new_black(key, value)));
+            return None;
+        };
+
+        eprintln!("insert into root returned insert_state {:?}", insert_state);
+
+        match insert_state {
+            InsertState::LeftConflict | InsertState::RightConflict => {
+                panic!("Unexpected right / left conflict in root")
+            }
+            InsertState::Clean => res,
+            InsertState::ChgdColor => panic!("Unexpected insert state in root: {:?}", insert_state),
+            InsertState::LeftRotate => {
+                let root = self.root.take().expect("unexpected empty root node");
+
+                match root.left_rotate() {
+                    Ok(mut new_child) => {
+                        new_child.color = Color::Black;
+                        self.root = Some(new_child);
+                        res
+                    }
+                    Err((_old_child, err)) => {
+                        eprintln!("Failed to rotate: {}\n{:?}", err, self);
+                        panic!("failed to left-rotate: {}", err);
+                    }
+                }
+            }
+            InsertState::RightRotate => {
+                let root = self.root.take().expect("unexpected empty root node");
+                match root.right_rotate() {
+                    Ok(mut new_child) => {
+                        new_child.color = Color::Black;
+                        self.root = Some(new_child);
+                        res
+                    }
+                    Err((_old_child, err)) => {
+                        eprintln!("Failed to rotate: {}\n{:?}", err, self);
+                        panic!("failed to right-rotate: {}", err);
+                    }
+                }
+            }
+        }
+    }
+
+    // TODO: add size, iterator, try_insert, adapt to std collection api
 
     pub fn insert_rec(&mut self, key: K, value: V) -> Option<V> {
-        let new_node = Box::new(TreeNode::new(key, value));
+        let new_node = Box::new(RBTreeNode::new(key, value));
         if let Some(node) = &mut self.root {
             node.insert_node_rec(new_node)
         } else {
@@ -40,7 +108,7 @@ impl<K: PartialOrd, V> RBTree<K, V> {
                     match &mut curr.smaller {
                         Some(node) => curr = node,
                         smaller @ None => {
-                            *smaller = Some(Box::new(TreeNode::new(key, value)));
+                            *smaller = Some(Box::new(RBTreeNode::new(key, value)));
                             return None;
                         }
                     }
@@ -48,7 +116,7 @@ impl<K: PartialOrd, V> RBTree<K, V> {
                     match &mut curr.larger {
                         Some(node) => curr = node,
                         larger @ None => {
-                            *larger = Some(Box::new(TreeNode::new(key, value)));
+                            *larger = Some(Box::new(RBTreeNode::new(key, value)));
                             return None;
                         }
                     }
@@ -57,7 +125,7 @@ impl<K: PartialOrd, V> RBTree<K, V> {
                 }
             }
         } else {
-            self.root = Some(Box::new(TreeNode::new(key, value)));
+            self.root = Some(Box::new(RBTreeNode::new(key, value)));
             None
         }
     }
@@ -180,7 +248,7 @@ impl<K: PartialOrd, V> RBTree<K, V> {
         }
     }
 
-    fn smallest_node(&self) -> Option<&TreeNode<K, V>> {
+    fn smallest_node(&self) -> Option<&RBTreeNode<K, V>> {
         if let Some(root) = &self.root {
             let mut curr = root;
             while let Some(subnode) = &curr.smaller {
@@ -197,9 +265,9 @@ impl<K: PartialOrd, V> RBTree<K, V> {
         self.smallest_node().map(|node| (&node.key, &node.value))
     }
 
-    fn smaller_node(&self, key: &K) -> Option<&TreeNode<K, V>> {
+    fn smaller_node(&self, key: &K) -> Option<&RBTreeNode<K, V>> {
         if let Some(root) = &self.root {
-            let mut candidate: Option<&TreeNode<K, V>> = None;
+            let mut candidate: Option<&RBTreeNode<K, V>> = None;
             let mut curr = root;
             loop {
                 // eprintln!("smaller_none({:?}), curr {:?}", key, curr.key);
@@ -231,7 +299,7 @@ impl<K: PartialOrd, V> RBTree<K, V> {
         self.smaller_node(key).map(|node| (&node.key, &node.value))
     }
 
-    fn largest_node(&self) -> Option<&TreeNode<K, V>> {
+    fn largest_node(&self) -> Option<&RBTreeNode<K, V>> {
         if let Some(root) = &self.root {
             let mut curr = root;
             while let Some(subnode) = &curr.larger {
@@ -247,9 +315,9 @@ impl<K: PartialOrd, V> RBTree<K, V> {
         self.largest_node().map(|node| (&node.key, &node.value))
     }
 
-    fn larger_node(&self, key: &K) -> Option<&TreeNode<K, V>> {
+    fn larger_node(&self, key: &K) -> Option<&RBTreeNode<K, V>> {
         if let Some(root) = &self.root {
-            let mut candidate: Option<&TreeNode<K, V>> = None;
+            let mut candidate: Option<&RBTreeNode<K, V>> = None;
             let mut curr = root;
             loop {
                 // eprintln!("smaller_none({:?}), curr {:?}", key, curr.key);
@@ -285,6 +353,7 @@ impl<K: PartialOrd, V> RBTree<K, V> {
 #[cfg(test)]
 mod test {
     use super::*;
+    use rand::Rng;
 
     #[test]
     fn test_first_level() {
@@ -550,6 +619,32 @@ mod test {
             assert_eq!(key, xpctd_key);
             assert_eq!(value, &xpctd_key.to_string());
         });
+    }
+
+    #[test]
+    fn test_insert_rb() {
+        let mut tree = RBTree::new();
+        for val in 1..=100 {
+            assert_eq!(tree.insert_rec_rb(val, val.to_string()), None);
+        }
+        eprintln!("after insert\n{:?}", tree);
+
+        let mut tree = RBTree::new();
+        let mut rng = rand::thread_rng();
+
+        eprintln!("testing random tree");
+        const MAX: u32 = 20;
+        for _ in 1..=10 {
+            loop {
+                let val = rng.gen_range(1..MAX * 4);
+                if !tree.contains(&val) {
+                    assert_eq!(tree.insert_rec_rb(val, val.to_string()), None);
+                    eprintln!("after insert {}\n{:?}", val, tree);
+                    break;
+                }
+            }
+        }
+        eprintln!("after random insert\n{:?}", tree);
     }
 }
 
