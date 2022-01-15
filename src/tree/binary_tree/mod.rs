@@ -159,25 +159,21 @@ impl<K: PartialOrd, V> BTree<K, V> {
                     // root becomes root.smaller
                     (Some(root.value), root.smaller.take())
                 }
+            } else if root.larger.is_some() {
+                // root becomes root.larger
+                (Some(root.value), root.larger.take())
             } else {
-                if root.larger.is_some() {
-                    // root becomes root.larger
-                    (Some(root.value), root.larger.take())
-                } else {
-                    // the tree is empty
-                    (Some(root.value), None)
-                }
+                // the tree is empty
+                (Some(root.value), None)
             };
             if new_root.is_some() {
                 self.root = new_root;
             }
             res
+        } else if let Some(root) = &mut self.root {
+            root.remove(key)
         } else {
-            if let Some(root) = &mut self.root {
-                root.remove(key)
-            } else {
-                None
-            }
+            None
         }
     }
 

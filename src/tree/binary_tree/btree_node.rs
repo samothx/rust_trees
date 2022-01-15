@@ -88,25 +88,21 @@ impl<K: PartialOrd, V> BTreeNode<K, V> {
                     // root becomes root.smaller
                     (Some(child.value), child.smaller.take())
                 }
+            } else if child.larger.is_some() {
+                // root becomes root.larger
+                (Some(child.value), child.larger.take())
             } else {
-                if child.larger.is_some() {
-                    // root becomes root.larger
-                    (Some(child.value), child.larger.take())
-                } else {
-                    // the tree is empty
-                    (Some(child.value), None)
-                }
+                // the tree is empty
+                (Some(child.value), None)
             };
             if new_child.is_some() {
                 *child_link = new_child;
             }
             res
+        } else if let Some(child) = child_link {
+            child.remove(key)
         } else {
-            if let Some(child) = child_link {
-                child.remove(key)
-            } else {
-                None
-            }
+            None
         }
     }
 
