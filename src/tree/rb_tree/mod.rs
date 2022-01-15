@@ -16,8 +16,7 @@ pub enum Branch {
 #[derive(PartialEq, Debug)]
 pub enum InsertState {
     Clean,
-    RightConflict,
-    LeftConflict,
+    Conflict,
     LeftRotate,
     RightRotate,
     ChgdColor,
@@ -40,7 +39,7 @@ impl<K: PartialOrd + Debug, V: Debug> RBTree<K, V> {
         RBTree { root: None }
     }
 
-    pub fn insert_rec_rb(&mut self, key: K, value: V) -> Option<V> {
+    pub fn insert(&mut self, key: K, value: V) -> Option<V> {
         let (res, insert_state) = if let Some(root) = &mut self.root {
             root.insert_node_rb(Box::new(RBTreeNode::new(key, value)), true)
         } else {
@@ -48,11 +47,11 @@ impl<K: PartialOrd + Debug, V: Debug> RBTree<K, V> {
             return None;
         };
 
-        eprintln!("insert into root returned insert_state {:?}", insert_state);
+        // eprintln!("insert into root returned insert_state {:?}", insert_state);
 
         match insert_state {
-            InsertState::LeftConflict | InsertState::RightConflict => {
-                panic!("Unexpected right / left conflict in root")
+            InsertState::Conflict => {
+                panic!("Unexpected conflict in root")
             }
             InsertState::Clean => res,
             InsertState::ChgdColor => panic!("Unexpected insert state in root: {:?}", insert_state),
@@ -66,7 +65,7 @@ impl<K: PartialOrd + Debug, V: Debug> RBTree<K, V> {
                         res
                     }
                     Err((_old_child, err)) => {
-                        eprintln!("Failed to rotate: {}\n{:?}", err, self);
+                        // eprintln!("Failed to rotate: {}\n{:?}", err, self);
                         panic!("failed to left-rotate: {}", err);
                     }
                 }
@@ -80,53 +79,11 @@ impl<K: PartialOrd + Debug, V: Debug> RBTree<K, V> {
                         res
                     }
                     Err((_old_child, err)) => {
-                        eprintln!("Failed to rotate: {}\n{:?}", err, self);
+                        // eprintln!("Failed to rotate: {}\n{:?}", err, self);
                         panic!("failed to right-rotate: {}", err);
                     }
                 }
             }
-        }
-    }
-
-    // TODO: add size, iterator, try_insert, adapt to std collection api
-
-    pub fn insert_rec(&mut self, key: K, value: V) -> Option<V> {
-        let new_node = Box::new(RBTreeNode::new(key, value));
-        if let Some(node) = &mut self.root {
-            node.insert_node_rec(new_node)
-        } else {
-            self.root = Some(new_node);
-            None
-        }
-    }
-
-    pub fn insert(&mut self, key: K, value: V) -> Option<V> {
-        if let Some(node) = &mut self.root {
-            let mut curr = node;
-            loop {
-                if key < curr.key {
-                    match &mut curr.smaller {
-                        Some(node) => curr = node,
-                        smaller @ None => {
-                            *smaller = Some(Box::new(RBTreeNode::new(key, value)));
-                            return None;
-                        }
-                    }
-                } else if key > curr.key {
-                    match &mut curr.larger {
-                        Some(node) => curr = node,
-                        larger @ None => {
-                            *larger = Some(Box::new(RBTreeNode::new(key, value)));
-                            return None;
-                        }
-                    }
-                } else {
-                    return Some(std::mem::replace(&mut curr.value, value));
-                }
-            }
-        } else {
-            self.root = Some(Box::new(RBTreeNode::new(key, value)));
-            None
         }
     }
 
@@ -348,6 +305,24 @@ impl<K: PartialOrd + Debug, V: Debug> RBTree<K, V> {
     pub fn larger(&self, key: &K) -> Option<(&K, &V)> {
         self.larger_node(key).map(|node| (&node.key, &node.value))
     }
+
+    pub fn check_rules(&self) -> std::result::Result<usize, String> {
+        if let Some(root) = &self.root {
+            root.check_rules(true, false)
+        } else {
+            Ok(0)
+        }
+    }
+}
+
+impl<K: PartialOrd + Debug, V: Debug> Debug for RBTree<K, V> {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        if let Some(root) = &self.root {
+            write!(f, "{}", root.to_string())
+        } else {
+            write!(f, "nil")
+        }
+    }
 }
 
 #[cfg(test)]
@@ -403,7 +378,7 @@ mod test {
         let mut tree: RBTree<String, String> = RBTree::new();
         for value in values {
             assert_eq!(
-                tree.insert_rec(value.to_string(), String::from("v1_") + value),
+                tree.insert(value.to_string(), String::from("v1_") + value),
                 None
             );
         }
@@ -625,35 +600,84 @@ mod test {
     fn test_insert_rb() {
         let mut tree = RBTree::new();
         for val in 1..=100 {
-            assert_eq!(tree.insert_rec_rb(val, val.to_string()), None);
+            assert_eq!(tree.insert(val, val.to_string()), None);
+            if let std::result::Result::Err(msg) = tree.check_rules() {
+                eprintln!(
+                    "RB violation after insert of {}, msg: {}\n{:?}",
+                    val, msg, tree
+                );
+                panic!("{}", msg)
+            }
+            // eprintln!("after insert ascending {}\n{:?}", val, tree);
         }
-        eprintln!("after insert\n{:?}", tree);
+        eprintln!("after insert ascending\n{:?}", tree);
+
+        let mut count = 0;
+        let mut cref = &mut count;
+        tree.traverse_asc(&mut move |_key: &u32, _value: &String| {
+            *cref += 1;
+        });
+        assert_eq!(count, 100);
+
+        let mut tree = RBTree::new();
+        for val in (1..=100).rev() {
+            assert_eq!(tree.insert(val, val.to_string()), None);
+            if let std::result::Result::Err(msg) = tree.check_rules() {
+                eprintln!(
+                    "RB violation after insert of {}, msg: {}\n{:?}",
+                    val, msg, tree
+                );
+                panic!("{}", msg)
+            }
+
+            // eprintln!("after insert descending {}\n{:?}", val, tree);
+        }
+        eprintln!("after insert descending\n{:?}", tree);
+
+        let mut count = 0;
+        let mut cref = &mut count;
+
+        tree.traverse_asc(&mut move |_key: &u32, _value: &String| {
+            *cref += 1;
+        });
+
+        assert_eq!(count, 100, "invalid node count");
 
         let mut tree = RBTree::new();
         let mut rng = rand::thread_rng();
 
         eprintln!("testing random tree");
-        const MAX: u32 = 20;
-        for _ in 1..=10 {
+        const MAX: u32 = 10000;
+        let mut entries = Vec::new();
+        for _ in 1..=MAX {
             loop {
                 let val = rng.gen_range(1..MAX * 4);
                 if !tree.contains(&val) {
-                    assert_eq!(tree.insert_rec_rb(val, val.to_string()), None);
-                    eprintln!("after insert {}\n{:?}", val, tree);
+                    assert_eq!(tree.insert(val, val.to_string()), None);
+                    entries.push(val);
+                    if let std::result::Result::Err(msg) = tree.check_rules() {
+                        eprintln!(
+                            "RB violation after insert of {}, msg: {}\n{:?}",
+                            val, msg, tree
+                        );
+                        panic!("{}", msg)
+                    }
+                    // eprintln!("after insert {}\n{:?}", val, tree);
                     break;
                 }
             }
         }
-        eprintln!("after random insert\n{:?}", tree);
-    }
-}
 
-impl<K: PartialOrd + Debug, V: Debug> Debug for RBTree<K, V> {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        if let Some(root) = &self.root {
-            write!(f, "{}", root.to_string())
-        } else {
-            write!(f, "nil")
+        let mut count = 0;
+        let mut cref = &mut count;
+        tree.traverse_asc(&mut move |_key: &u32, _value: &String| {
+            *cref += 1;
+        });
+        assert_eq!(count, MAX, "invalid node count");
+
+        // eprintln!("after random insert\n{:?}", tree);
+        for val in entries {
+            assert_eq!(tree.find(&val), Some(&val.to_string()));
         }
     }
 }

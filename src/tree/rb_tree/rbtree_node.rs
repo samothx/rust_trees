@@ -1,4 +1,5 @@
 use super::SubNode;
+use crate::tree::rb_tree::rbtree_node::Color::Red;
 use crate::tree::rb_tree::{Branch, InsertState};
 use colored::*;
 use std::fmt::Debug;
@@ -49,12 +50,12 @@ impl<K: PartialOrd + Debug, V> RBTreeNode<K, V> {
         node: Box<RBTreeNode<K, V>>,
         is_root: bool,
     ) -> (Option<V>, InsertState) {
-        eprintln!(
+        /*eprintln!(
             "({:?}).insert_node_rb(key: {:?}) root: {}",
             self.key, node.key, is_root
-        );
+        );*/
         if node.key == self.key {
-            eprintln!("insert_node_rb() update");
+            //eprintln!("insert_node_rb() update");
             return (
                 Some(std::mem::replace(&mut self.value, node.value)),
                 InsertState::Clean,
@@ -69,79 +70,75 @@ impl<K: PartialOrd + Debug, V> RBTreeNode<K, V> {
 
         if let Some(child_node) = child_link {
             let (res, ins_state) = child_node.insert_node_rb(node, false);
-            eprintln!(
+            /* eprintln!(
                 "({:?}).insert_node_rb() root: {} insert into subnode returned insert_state {:?}",
                 self.key, is_root, ins_state
             );
+            */
             match ins_state {
-                InsertState::Clean => return (res, ins_state),
+                InsertState::Clean => (res, ins_state),
                 InsertState::ChgdColor => {
                     if is_root {
-                        return (res, InsertState::Clean);
+                        (res, InsertState::Clean)
                     } else {
                         // subnode has changed color to red
                         if self.color == Color::Red {
                             // tell my parent that me and my sibling are red
-                            return (
-                                res,
-                                match branch {
-                                    Branch::Smaller => InsertState::LeftConflict,
-                                    Branch::Larger => InsertState::RightConflict,
-                                },
-                            );
+                            (res, InsertState::Conflict)
                         } else {
-                            return (res, InsertState::Clean);
+                            (res, InsertState::Clean)
                         }
                     }
                 }
-                InsertState::LeftConflict | InsertState::RightConflict => {
+                InsertState::Conflict => {
                     // child reports that it and its child are red
                     if let Some(true) = uncle_link.as_mut().map(|node| node.color == Color::Red) {
                         // uncle is red
                         if !is_root {
                             self.color = Color::Red;
                         }
-                        uncle_link.as_mut().map(|uncle| uncle.color = Color::Black);
-                        child_link.as_mut().map(|child| child.color = Color::Black);
-                        return (
+                        if let Some(uncle) = uncle_link.as_mut() {
+                            uncle.color = Color::Black
+                        }
+                        if let Some(child) = child_link.as_mut() {
+                            child.color = Color::Black
+                        }
+
+                        (
                             res,
                             if is_root {
                                 InsertState::Clean
                             } else {
                                 InsertState::ChgdColor
                             },
-                        );
+                        )
                     } else {
-                        if ins_state == InsertState::RightConflict {
-                            return (res, InsertState::LeftRotate);
-                        } else {
-                            return (res, InsertState::RightRotate);
+                        match branch {
+                            Branch::Smaller => (res, InsertState::RightRotate),
+                            Branch::Larger => (res, InsertState::LeftRotate),
                         }
                     }
                 }
                 InsertState::LeftRotate => match self.rotate_child(RotDir::Left, branch) {
-                    Ok(_) => return (res, InsertState::Clean),
+                    Ok(_) => (res, InsertState::Clean),
                     Err(err) => panic!("{}", err),
                 },
                 InsertState::RightRotate => match self.rotate_child(RotDir::Right, branch) {
-                    Ok(_) => return (res, InsertState::Clean),
+                    Ok(_) => (res, InsertState::Clean),
                     Err(err) => panic!("{}", err),
                 },
             }
         } else {
             assert_eq!(node.color, Color::Red);
             *child_link = Some(node);
-            return (
+            (
                 None,
                 if self.color == Color::Black {
                     InsertState::Clean
                 } else {
-                    match branch {
-                        Branch::Smaller => InsertState::LeftConflict,
-                        Branch::Larger => InsertState::RightConflict,
-                    }
+                    InsertState::Conflict
                 },
-            );
+            )
         }
     }
 
@@ -268,12 +265,24 @@ impl<K: PartialOrd + Debug, V> RBTreeNode<K, V> {
         mut self: Box<Self>,
     ) -> std::result::Result<Box<Self>, (Box<Self>, &'static str)> {
         if self.larger.is_some() {
-            let mut larger = self.larger.take().expect("unexpected empty node 1");
-            larger.color = Color::Black;
             self.color = Color::Red;
-            self.larger = larger.smaller.take();
-            larger.smaller = Some(self);
-            Ok(larger)
+            let mut larger = self.larger.take().expect("unexpected empty link");
+            let mut new_root =
+                if let Some(true) = larger.smaller.as_ref().map(|node| node.color == Color::Red) {
+                    //  do a modified right rotate on larger.larger, larger, larger.smaller
+                    let mut smaller_gc = larger.smaller.take().expect("unexpected empty link");
+                    larger.smaller = smaller_gc.larger.take();
+                    smaller_gc.larger = Some(larger);
+                    smaller_gc
+                } else {
+                    larger
+                };
+            // now left rotate larger smaller_gc self
+
+            self.larger = new_root.smaller.take();
+            new_root.smaller = Some(self);
+            new_root.color = Color::Black;
+            Ok(new_root)
         } else {
             Err((self, "cannot left rotate - larger subnode is nil"))
         }
@@ -293,12 +302,24 @@ impl<K: PartialOrd + Debug, V> RBTreeNode<K, V> {
         mut self: Box<Self>,
     ) -> std::result::Result<Box<Self>, (Box<Self>, &'static str)> {
         if self.smaller.is_some() {
-            let mut smaller = self.smaller.take().expect("unexpected empty node 1");
-            smaller.color = Color::Black;
             self.color = Color::Red;
-            self.smaller = smaller.larger.take();
-            smaller.larger = Some(self);
-            Ok(smaller)
+            let mut smaller = self.smaller.take().expect("unexpected empty link");
+            let mut new_root =
+                if let Some(true) = smaller.larger.as_ref().map(|node| node.color == Color::Red) {
+                    //  do a modified left rotate on smaller.larger, larger, larger.smaller
+                    let mut larger_gc = smaller.larger.take().expect("unexpected empty link");
+                    smaller.larger = larger_gc.smaller.take();
+                    larger_gc.smaller = Some(smaller);
+                    larger_gc
+                } else {
+                    smaller
+                };
+            // now left rotate larger smaller_gc self
+
+            self.smaller = new_root.larger.take();
+            new_root.larger = Some(self);
+            new_root.color = Color::Black;
+            Ok(new_root)
         } else {
             Err((self, "cannot right rotate - smaller subnode is nil"))
         }
@@ -359,6 +380,47 @@ impl<K: PartialOrd + Debug, V: Debug> RBTreeNode<K, V> {
                 buffer.push_str(&format!("{}{}{}\n", sub_lead, J_SMALLER, nil));
             }
         }
+    }
+
+    pub fn check_rules(
+        &self,
+        is_root: bool,
+        parent_red: bool,
+    ) -> std::result::Result<usize, String> {
+        if is_root {
+            // this is root
+            if let Color::Red = self.color {
+                return Err("RB violation: root is red".to_string());
+            }
+        }
+
+        if (self.color == Red) && parent_red {
+            return Err(format!(
+                "RB violation: two successive red nodes @{:?} and parent",
+                self.key
+            ));
+        }
+
+        let black_count_sm = if let Some(node) = &self.smaller {
+            node.check_rules(false, self.color == Color::Red)?
+        } else {
+            0
+        };
+
+        let black_count_lg = if let Some(node) = &self.larger {
+            node.check_rules(false, self.color == Color::Red)?
+        } else {
+            0
+        };
+
+        if black_count_sm != black_count_lg {
+            return Err(format!(
+                "RB violation: mismatching black counts @{:?} {}!={}",
+                self.key, black_count_sm, black_count_lg
+            ));
+        }
+
+        Ok(black_count_sm + if self.color == Color::Black { 1 } else { 0 })
     }
 }
 

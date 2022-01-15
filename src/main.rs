@@ -5,9 +5,9 @@ fn main() {
     let blue = "Blue".blue().to_string();
     let green = "Green".green().to_string();
     let mut buffer = red;
-    buffer.push_str(",");
+    buffer.push(',');
     buffer.push_str(&blue);
-    buffer.push_str(",");
+    buffer.push(',');
     buffer.push_str(&green);
     println!("Hello World! \n{}", buffer);
 }
