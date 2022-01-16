@@ -172,36 +172,36 @@ impl<K: PartialOrd + Debug, V: Debug> RBTree<K, V> {
     // TODO: Find out how to return a value from a deleted entry
     // TODO: try recursive version first
 
-    /// #remove
-    /// handles removes on layer 1 & 2 of the tree then uses recursive TreeNode.remove()
     pub fn remove(&mut self, key: &K) -> Option<V> {
-        match self.root.as_ref().map(|root| root.key == *key) {
-            Some(true) => {
-                // delete the root
-                let mut root = *self.root.take().expect("unexpected empty node");
-                if root.smaller.is_some() {
-                    if root.larger.is_some() {
-                        let mut new_root = root.smaller.take().expect("unexpected empty node");
-                        new_root
-                            .insert_node_rec(root.larger.take().expect("unexpected empty node"));
-                        self.root = Some(new_root);
-                    } else {
-                        self.root = root.smaller;
-                    }
-                } else if root.larger.is_some() {
-                    self.root = root.larger;
-                }
-                Some(root.value)
-            }
-            Some(false) => {
-                // let the root/siblings node delete matching siblings recursively
-                if let Some(root) = &mut self.root {
-                    root.remove(key)
+        if let Some(true) = self.root.as_ref().map(|root| root.key == *key) {
+            // delete the root
+            let mut root = self.root.take().expect("unexpected empty link");
+            let (res, new_root) = if root.smaller.is_some() {
+                if root.larger.is_some() {
+                    // root has two siblings - swap root with next larger, delete next larger
+                    let (key, value) = root.remove_next_larger();
+                    root.key = key;
+                    let res = std::mem::replace(&mut root.value, value);
+                    (Some(res), Some(root))
                 } else {
-                    None
+                    // root becomes root.smaller
+                    (Some(root.value), root.smaller.take())
                 }
+            } else if root.larger.is_some() {
+                // root becomes root.larger
+                (Some(root.value), root.larger.take())
+            } else {
+                // the tree is empty
+                (Some(root.value), None)
+            };
+            if new_root.is_some() {
+                self.root = new_root;
             }
-            None => None,
+            res
+        } else if let Some(root) = &mut self.root {
+            root.remove(key)
+        } else {
+            None
         }
     }
 
@@ -313,6 +313,10 @@ impl<K: PartialOrd + Debug, V: Debug> RBTree<K, V> {
             Ok(0)
         }
     }
+
+    pub fn is_empty(&self) -> bool {
+        self.root.is_none()
+    }
 }
 
 impl<K: PartialOrd + Debug, V: Debug> Debug for RBTree<K, V> {
@@ -375,55 +379,69 @@ mod test {
     fn rb_test_remove() {
         eprintln!("test_remove");
         let values = [10u32, 20, 5, 15, 25, 3, 8, 4, 1, 9, 6, 13, 17, 22, 27];
-        let mut tree: RBTree<u32, String> = RBTree::new();
+        let mut tree = RBTree::new();
         for value in values {
             assert_eq!(tree.insert(value, value.to_string()), None);
         }
-
         eprintln!("{:?}\n", &tree);
 
-        assert_eq!(tree.remove(&10), Some(10.to_string()));
-        assert!(!tree.contains(&10));
-        if let Err(msg) = tree.check_rules() {
-            panic!("invalid tree after remove {}: {}", 10, msg);
-        }
-
-        eprintln!("after remove 10\n{:?}\n", &tree);
-
-        assert_eq!(tree.remove(&5), Some(5.to_string()));
-        assert!(!tree.contains(&5));
-
-        eprintln!("after remove 5\n{:?}\n", &tree);
-
-        assert_eq!(tree.remove(&20), Some(20.to_string()));
-        assert!(!tree.contains(&20));
-
-        eprintln!("after remove 20\n{:?}\n", &tree);
-
-        let values = [10u32, 20, 5];
-        let mut tree: RBTree<u32, String> = RBTree::new();
         for value in values {
-            assert_eq!(tree.insert(value, value.to_string()), None);
-        }
-        assert_eq!(tree.remove(&20), Some(20.to_string()));
-        assert!(!tree.contains(&20));
-        assert_eq!(tree.remove(&5), Some(5.to_string()));
-        assert!(!tree.contains(&5));
-
-        let values = [10u32, 20, 5, 15, 25, 3, 8, 4, 1, 9, 6, 13, 17, 22, 27];
-
-        let mut tree: RBTree<u32, String> = RBTree::new();
-        for value in values {
-            assert_eq!(tree.insert(value, value.to_string()), None);
-        }
-
-        for value in values {
-            eprintln!("remove {} from:\n{:?}\n", value, &tree);
             assert_eq!(tree.remove(&value), Some(value.to_string()));
-            eprintln!("tree after remove {}:\n{:?}\n", value, &tree);
-            assert_eq!(tree.find(&value), None);
-            assert_eq!(tree.remove(&value), None);
+            assert!(!tree.contains(&value));
+
+            if let Err(msg) = tree.check_rules() {
+                eprintln!("tree rule violation: {} in \n{:?}", msg, tree);
+                panic!("tree rule violation: {}", msg);
+            }
+
+            let mut last: Option<u32> = None;
+            tree.traverse_asc(&mut move |key, _value| {
+                if let Some(value) = last {
+                    if value >= *key {
+                        panic!("last >= curr - {}>={}", last.unwrap(), *key);
+                    }
+                }
+                last = Some(*key);
+            });
         }
+        assert!(tree.is_empty());
+        let mut rng = rand::thread_rng();
+        let mut tree: RBTree<u32, String> = RBTree::new();
+        let mut list = Vec::new();
+        const MAX: u32 = 10000;
+        for _ in 1..=MAX {
+            loop {
+                let key = rng.gen_range(1..=MAX * 4);
+                if !tree.contains(&key) {
+                    list.push(key);
+                    tree.insert(key, key.to_string());
+                    break;
+                }
+            }
+        }
+
+        while !list.is_empty() {
+            let index = rng.gen_range(0..list.len());
+            let key = list.remove(index);
+            assert_eq!(tree.remove(&key), Some(key.to_string()));
+            assert!(!tree.contains(&key));
+            assert_eq!(tree.remove(&key), None);
+
+            if let Err(msg) = tree.check_rules() {
+                panic!("tree rule violation: {}", msg);
+            }
+
+            let mut last: Option<u32> = None;
+            tree.traverse_asc(&mut move |key, _value| {
+                if let Some(value) = last {
+                    if value >= *key {
+                        panic!("last >= curr - {}>={}", last.unwrap(), *key);
+                    }
+                }
+                last = Some(*key);
+            });
+        }
+        assert!(tree.is_empty());
     }
 
     #[test]

@@ -277,6 +277,10 @@ impl<K: PartialOrd, V> BTree<K, V> {
     pub fn larger(&self, key: &K) -> Option<(&K, &V)> {
         self.larger_node(key).map(|node| (&node.key, &node.value))
     }
+
+    pub fn is_empty(&self) -> bool {
+        self.root.is_none()
+    }
 }
 
 impl<K: PartialOrd + Debug, V: Debug> Debug for BTree<K, V> {
@@ -292,6 +296,7 @@ impl<K: PartialOrd + Debug, V: Debug> Debug for BTree<K, V> {
 #[cfg(test)]
 mod test {
     use super::*;
+    use rand::Rng;
 
     #[test]
     fn bt_test_first_level() {
@@ -358,58 +363,55 @@ mod test {
         for value in values {
             assert_eq!(tree.insert(value, value.to_string()), None);
         }
-
         eprintln!("{:?}\n", &tree);
 
-        assert_eq!(tree.remove(&10), Some(10.to_string()));
-        let mut last: Option<u32> = None;
-        tree.traverse_asc(&mut move |key, _value| {
-            if let Some(value) = last {
-                if value >= *key {
-                    panic!("last >= curr")
+        for value in values {
+            assert_eq!(tree.remove(&value), Some(value.to_string()));
+            assert!(!tree.contains(&value));
+
+            let mut last: Option<u32> = None;
+            tree.traverse_asc(&mut move |key, _value| {
+                if let Some(value) = last {
+                    if value >= *key {
+                        panic!("last >= curr - {}>={}", last.unwrap(), *key);
+                    }
+                }
+                last = Some(*key);
+            });
+        }
+        assert!(tree.is_empty());
+        let mut rng = rand::thread_rng();
+        let mut tree: BTree<u32, String> = BTree::new();
+        let mut list = Vec::new();
+        const MAX: u32 = 10000;
+        for _ in 1..=MAX {
+            loop {
+                let key = rng.gen_range(1..=MAX * 4);
+                if !tree.contains(&key) {
+                    list.push(key);
+                    tree.insert(key, key.to_string());
+                    break;
                 }
             }
-            last = Some(*key);
-        });
-
-        assert!(!tree.contains(&10));
-
-        eprintln!("after remove 10\n{:?}\n", &tree);
-
-        assert_eq!(tree.remove(&5), Some(5.to_string()));
-        assert!(!tree.contains(&5));
-
-        eprintln!("after remove 5\n{:?}\n", &tree);
-
-        assert_eq!(tree.remove(&20), Some(20.to_string()));
-        assert!(!tree.contains(&20));
-
-        eprintln!("after remove 20\n{:?}\n", &tree);
-
-        let values = [10u32, 20, 5];
-        let mut tree: BTree<u32, String> = BTree::new();
-        for value in values {
-            assert_eq!(tree.insert(value, value.to_string()), None);
-        }
-        assert_eq!(tree.remove(&20), Some(20.to_string()));
-        assert!(!tree.contains(&20));
-        assert_eq!(tree.remove(&5), Some(5.to_string()));
-        assert!(!tree.contains(&5));
-
-        let values = [10u32, 20, 5, 15, 25, 3, 8, 4, 1, 9, 6, 13, 17, 22, 27];
-
-        let mut tree: BTree<u32, String> = BTree::new();
-        for value in values {
-            assert_eq!(tree.insert(value, value.to_string()), None);
         }
 
-        for value in values {
-            eprintln!("remove {} from:\n{:?}\n", value, &tree);
-            assert_eq!(tree.remove(&value), Some(value.to_string()));
-            eprintln!("tree after remove {}:\n{:?}\n", value, &tree);
-            assert_eq!(tree.find(&value), None);
-            assert_eq!(tree.remove(&value), None);
+        while !list.is_empty() {
+            let index = rng.gen_range(0..list.len());
+            let key = list.remove(index);
+            assert_eq!(tree.remove(&key), Some(key.to_string()));
+            assert!(!tree.contains(&key));
+            assert_eq!(tree.remove(&key), None);
+            let mut last: Option<u32> = None;
+            tree.traverse_asc(&mut move |key, _value| {
+                if let Some(value) = last {
+                    if value >= *key {
+                        panic!("last >= curr - {}>={}", last.unwrap(), *key);
+                    }
+                }
+                last = Some(*key);
+            });
         }
+        assert!(tree.is_empty());
     }
 
     #[test]
